@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
+
 import numpy as np
 import pandas as pd
 from classdirectory.classfile import LSTMNet
@@ -41,17 +41,12 @@ if __name__ == '__main__':
 
     # Save the DataFrame to a CSV file
     #df = df.to_csv('BTC_USDT_5m_indicators.csv', index=False)
-    df = pd.read_csv('BTC_USDT_5m_with_indicators2.csv')
-
+    df = pd.read_csv('BTC_USDT_5m_with_indicators.csv')
+    df = df.dropna()
     scaler = StandardScaler()
-    X = df.iloc[:, 1:].values  # all starting from index 1
+    X = df.drop(['close', 'timestamp'], axis=1).values
     y = df['close'].values
     X = scaler.fit_transform(X)
-
-    # Scale the features
-    scaler = StandardScaler()
-    X = scaler.fit_transform(X)
-
     # Perform feature selection
     k = 10  # Number of features to select
     selector = SelectKBest(f_regression, k=k)
@@ -65,9 +60,9 @@ if __name__ == '__main__':
     num_folds = 5
 
     # Define the hyperparameters to search over
-    input_sizes = [10, 15, 21]
-    hidden_sizes = [32, 64]
-    num_layers_list = [1, 2, 3]
+    input_sizes = [X.shape[1]]
+    hidden_sizes = [16, 32, 64]
+    num_layers_list = [2, 4, 6]
     dropout_sizes = [0.1, 0.2]
     # Perform cross-validation to find the best hyperparameters
     best_val_loss = float('inf')

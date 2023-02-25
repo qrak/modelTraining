@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 from classdirectory.classfile import LSTMNet
 from classdirectory.classfile import EarlyStopping
-import pandas_ta as ta
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
