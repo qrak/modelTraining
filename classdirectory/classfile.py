@@ -20,6 +20,17 @@ class LSTMNet(nn.Module):
         out = self.fc2(out)
         return out.to(device)
 
+    def evaluate(self, loader, criterion):
+        total_loss = 0.0
+        self.eval()
+        with torch.no_grad():
+            for inputs, labels in loader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = self(inputs.unsqueeze(1))
+                loss = criterion(outputs, labels.view(-1, 1).to(device))
+                total_loss += loss.item()
+        return total_loss / len(loader)
+
 
 
 class EarlyStopping:

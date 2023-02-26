@@ -12,12 +12,7 @@ from sklearn.feature_selection import SelectKBest, f_regression
 from torch.utils.data import DataLoader, TensorDataset
 
 if __name__ == '__main__':
-    """x_train = np.random.rand(100, 14)
-    y_train = np.random.rand(100)
-    x_val = np.random.rand(50, 14)
-    y_val = np.random.rand(50)
-    x_test = np.random.rand(50, 14)
-    y_test = np.random.rand(50)"""
+
     # Load data into dataframe
 
     if torch.cuda.is_available():
@@ -40,7 +35,8 @@ if __name__ == '__main__':
 
 
     # Save the DataFrame to a CSV file
-    #df = df.to_csv('BTC_USDT_5m_indicators.csv', index=False)
+    #df = df.to_csv('test_df.csv', index=False)
+    #df = pd.read_csv('BTC_USDT_5m_with_indicators.csv')
     df = pd.read_csv('BTC_USDT_5m_with_indicators.csv')
     df = df.dropna()
     scaler = StandardScaler()
@@ -51,7 +47,6 @@ if __name__ == '__main__':
     k = 10  # Number of features to select
     selector = SelectKBest(f_regression, k=k)
     X = selector.fit_transform(X, y)
-
     # Split the data into training, validation, and test sets
     X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
     X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.25, shuffle=False)
@@ -64,8 +59,16 @@ if __name__ == '__main__':
     hidden_sizes = [16, 32, 64]
     num_layers_list = [2, 4, 6]
     dropout_sizes = [0.1, 0.2]
-    # Perform cross-validation to find the best hyperparameters
+
+    num_epochs = 100
     best_val_loss = float('inf')
+    best_model = None
+    model = None
+    train_loader = None
+    optimizer = None
+    criterion = None
+    val_loader = None
+    best_hyperparams = None
     for input_size in input_sizes:
         for hidden_size in hidden_sizes:
             for num_layers in num_layers_list:
@@ -74,7 +77,8 @@ if __name__ == '__main__':
                         f"Training model with input_size={input_size}, hidden_size={hidden_size}, num_layers={num_layers}, dropout={dropout_size}")
                     val_losses = []
                     kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
-                    for train_idx, val_idx in kf.split(X_train_val):
+                    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train_val)):
+                        print(f"Fold {fold + 1}/{num_folds}")
                         # Split the data into training and validation sets for this fold
                         X_fold_train, y_fold_train = X_train_val[train_idx], y_train_val[train_idx]
                         X_fold_val, y_fold_val = X_train_val[val_idx], y_train_val[val_idx]
@@ -84,20 +88,17 @@ if __name__ == '__main__':
                                                       torch.tensor(y_fold_train, dtype=torch.float32))
                         val_dataset = TensorDataset(torch.tensor(X_fold_val, dtype=torch.float32),
                                                     torch.tensor(y_fold_val, dtype=torch.float32))
-                        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0)
-                        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=0)
-
+                        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
+                        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
                         # Create the model, loss function, and optimizer
                         model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
-                                        output_size=1, dropout=dropout_size)
-                        criterion = nn.MSELoss()
+                                        output_size=1, dropout=dropout_size).to(device)
+                        criterion = nn.MSELoss().to(device)
                         optimizer = optim.Adam(model.parameters(), lr=0.0001)
-
                         # Initialize the EarlyStopping callback
                         early_stopping = EarlyStopping(patience=10)
 
                         # Train the model
-                        num_epochs = 150
                         for epoch in range(num_epochs):
                             train_loss = 0.0
                             model.train()
@@ -112,15 +113,7 @@ if __name__ == '__main__':
                                 train_loss += loss.item()
 
                             # Evaluate the model on the validation set
-                            val_loss = 0.0
-                            model.eval()
-                            with torch.no_grad():
-                                for inputs, labels in val_loader:
-                                    inputs, labels = inputs.to(device), labels.to(device)
-                                    outputs = model(inputs.unsqueeze(1))
-                                    loss = criterion(outputs, labels.view(-1, 1).to(
-                                        device))  # Move labels to the same device as the output tensor
-                                    val_loss += loss.item()
+                            val_loss = model.evaluate(val_loader, criterion)
 
                             # Call the EarlyStopping callback
                             early_stopping(val_loss, model)
@@ -128,31 +121,25 @@ if __name__ == '__main__':
                             # If early stopping has been triggered, break out of the loop
                             if early_stopping.early_stop:
                                 break
+                            if (epoch + 1) % 10 == 0:
+                                print(
+                                    f"Fold {fold + 1}/{num_folds}, Epoch {epoch + 1}/{num_epochs}, Training Loss: {train_loss / len(train_loader):.6f}, Validation Loss: {val_loss / len(val_loader):.6f}")
 
                         # Evaluate the model on the validation set for this fold
-                        model.eval()
-                        val_loss = 0.0
-                        with torch.no_grad():
-                            for inputs, labels in val_loader:
-                                inputs, labels = inputs.to(device), labels.to(device)
-                                outputs = model(inputs.unsqueeze(1))
-                                loss = criterion(outputs, labels.view(-1, 1).to(
-                                    device))  # Move labels to the same device as the output tensor
-                                val_loss += loss.item()
+                        val_loss = model.evaluate(val_loader, criterion)
                         val_losses.append(val_loss)
 
-                    # Compute the mean validation loss across all folds
-                    mean_val_loss = np.mean(val_losses)
-                    print(f"Validation loss: {mean_val_loss:.6f}")
+                        mean_val_loss = np.mean(val_losses[:fold + 1])
+                        print(f"Fold {fold + 1}/{num_folds}, Mean Validation Loss: {mean_val_loss:.6f}")
 
-                    # Check if this model has a lower validation loss than the previous best model
-                    if mean_val_loss < best_val_loss:
-                        best_val_loss = mean_val_loss
-                        best_model = model
-                        best_hyperparams = (input_size, hidden_size, num_layers, dropout_size)
+                        # Check if this model has a lower validation loss than the previous best model
+                        if mean_val_loss < best_val_loss:
+                            best_val_loss = mean_val_loss
+                            best_model = model
+                            best_hyperparams = (input_size, hidden_size, num_layers, dropout_size)
+
     # Train the best model on the full training set and evaluate it on the test set
     early_stopping = EarlyStopping(patience=10)
-    num_epochs = 150
     for epoch in range(num_epochs):
         train_loss = 0.0
         best_model.train()
@@ -166,14 +153,7 @@ if __name__ == '__main__':
             train_loss += loss.item()
 
         # Evaluate the model on the validation set
-        val_loss = 0.0
-        best_model.eval()
-        with torch.no_grad():
-            for inputs, labels in val_loader:
-                inputs, labels = inputs.to(device), labels.to(device)
-                outputs = best_model(inputs.unsqueeze(1))
-                loss = criterion(outputs, labels.view(-1, 1).to(device))
-                val_loss += loss.item()
+        val_loss = best_model.evaluate(val_loader, criterion)
 
         # Call the early stopping callback
         early_stopping(val_loss, best_model)
@@ -182,19 +162,16 @@ if __name__ == '__main__':
         if early_stopping.early_stop:
             break
 
+        if (epoch + 1) % 10 == 0:
+            print(
+                f"Epoch {epoch + 1}/{num_epochs}, Training Loss: {train_loss / len(train_loader):.6f}, Validation Loss: {val_loss / len(val_loader):.6f}")
     # Evaluate the best model on the test set
     test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32).to(device),
                                  torch.tensor(y_test, dtype=torch.float32).to(device))
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=0)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=4)
 
-    test_loss = 0.0
-    best_model.eval()
-    with torch.no_grad():
-        for inputs, labels in test_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            outputs = best_model(inputs.unsqueeze(1))
-            loss = criterion(outputs, labels.view(-1, 1).to(device))
-            test_loss += loss.item()
+    test_loss = best_model.evaluate(test_loader, criterion)
+    print(f"Test Loss: {test_loss:.6f}")
 
     print(f"Best hyperparameters: input_size={best_hyperparams[0]}, hidden_size={best_hyperparams[1]},num_layers={best_hyperparams[2]}, dropout={best_hyperparams[3]}")
     print(f"Validation loss: {best_val_loss:.6f}")
