@@ -50,7 +50,13 @@ if __name__ == '__main__':
     # Split the data into training, validation, and test sets
     X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
     X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.25, shuffle=False)
-
+    # Move the data to the specified device
+    X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
+    X_val = torch.tensor(X_val, dtype=torch.float32).to(device)
+    X_test = torch.tensor(X_test, dtype=torch.float32).to(device)
+    y_train = torch.tensor(y_train, dtype=torch.float32).to(device)
+    y_val = torch.tensor(y_val, dtype=torch.float32).to(device)
+    y_test = torch.tensor(y_test, dtype=torch.float32).to(device)
     # Define the number of folds for cross-validation
     num_folds = 5
 
@@ -84,12 +90,12 @@ if __name__ == '__main__':
                         X_fold_val, y_fold_val = X_train_val[val_idx], y_train_val[val_idx]
 
                         # Create the PyTorch datasets and data loaders
-                        train_dataset = TensorDataset(torch.tensor(X_fold_train, dtype=torch.float32),
-                                                      torch.tensor(y_fold_train, dtype=torch.float32))
-                        val_dataset = TensorDataset(torch.tensor(X_fold_val, dtype=torch.float32),
-                                                    torch.tensor(y_fold_val, dtype=torch.float32))
-                        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4, pin_memory=True)
-                        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4, pin_memory=True)
+                        train_dataset = TensorDataset(torch.tensor(X_fold_train, dtype=torch.float32).to(device),
+                                                      torch.tensor(y_fold_train, dtype=torch.float32).to(device))
+                        val_dataset = TensorDataset(torch.tensor(X_fold_val, dtype=torch.float32).to(device),
+                                                    torch.tensor(y_fold_val, dtype=torch.float32).to(device))
+                        train_loader = DataLoader(train_dataset, batch_size=96, shuffle=True, num_workers=4, pin_memory=True)
+                        val_loader = DataLoader(val_dataset, batch_size=96, shuffle=False, num_workers=4, pin_memory=True)
                         # Create the model, loss function, and optimizer
                         model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
                                         output_size=1, dropout=dropout_size).to(device)
@@ -168,7 +174,7 @@ if __name__ == '__main__':
     # Evaluate the best model on the test set
     test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32).to(device),
                                  torch.tensor(y_test, dtype=torch.float32).to(device))
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=96, shuffle=False, num_workers=4)
 
     test_loss = best_model.evaluate(test_loader, criterion)
     print(f"Test Loss: {test_loss:.6f}")
