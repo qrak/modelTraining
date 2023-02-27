@@ -94,8 +94,8 @@ if __name__ == '__main__':
                                                       torch.tensor(y_fold_train, dtype=torch.float32).to(device))
                         val_dataset = TensorDataset(torch.tensor(X_fold_val, dtype=torch.float32).to(device),
                                                     torch.tensor(y_fold_val, dtype=torch.float32).to(device))
-                        train_loader = DataLoader(train_dataset, batch_size=96, shuffle=True, num_workers=4, pin_memory=True)
-                        val_loader = DataLoader(val_dataset, batch_size=96, shuffle=False, num_workers=4, pin_memory=True)
+                        train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4, pin_memory=False)
+                        val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4, pin_memory=False)
                         # Create the model, loss function, and optimizer
                         model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
                                         output_size=1, dropout=dropout_size).to(device)
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     # Evaluate the best model on the test set
     test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32).to(device),
                                  torch.tensor(y_test, dtype=torch.float32).to(device))
-    test_loader = DataLoader(test_dataset, batch_size=96, shuffle=False, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False, num_workers=4)
 
     test_loss = best_model.evaluate(test_loader, criterion)
     print(f"Test Loss: {test_loss:.6f}")
