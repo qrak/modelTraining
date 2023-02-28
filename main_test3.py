@@ -9,68 +9,65 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import SelectKBest, f_regression
 from torch.utils.data import DataLoader, TensorDataset
+import torch.nn.functional as F
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 if __name__ == '__main__':
-    import torch.nn.functional as F
-
 
     class LSTMNet(pl.LightningModule):
-        def __init__(self, input_size, hidden_size, num_layers, output_size, dropout):
+        def __init__(self, input_size, hidden_size, num_layers, output_size, dropout=0.1):
             super().__init__()
-            self.hidden_size = hidden_size
-            self.num_layers = num_layers
-            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
             self.dropout = nn.Dropout(dropout)
             self.fc1_linear = nn.Linear(hidden_size, 64)
             self.bn1 = nn.BatchNorm1d(64)
             self.fc2_linear = nn.Linear(64, output_size)
             self.loss = nn.MSELoss()
-            self.l2_reg = nn.Linear(hidden_size, hidden_size, bias=False)
-            self.l2_lambda = 1e-5
+            self.l2_reg = nn.Linear(1, 1, bias=False)
+
 
         def forward(self, x):
-            # add batch dimension if necessary
-            if len(x.shape) == 2:
-                x = x.unsqueeze(0)
-
-            h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-            c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(x.device)
-            output, _ = self.lstm(x, (h0, c0))
+            output, _ = self.lstm(x)
             output = self.dropout(output)
+            if len(output.shape) == 2:
+                output = output.unsqueeze(1)
+            output = output[:, -1, :]
             output = self.fc1_linear(output)
             output = self.bn1(output)
             output = F.relu(output)
             output = self.fc2_linear(output)
+            output = self.l2_reg(output)
             return output
 
         def training_step(self, batch, batch_idx):
-            inputs, labels = batch
-            outputs = self(inputs)
-            l2_loss = 0
-            for param in self.lstm.parameters():
-                l2_loss += self.l2_lambda * torch.sum(torch.square(param))
-            for param in self.l2_reg.parameters():
-                l2_loss += self.l2_lambda * torch.sum(torch.square(param))
-            loss = self.loss(outputs, labels.view(-1, 1)) + l2_loss
+            x, y = batch
+            y_hat = self(x)
+            loss = self.loss(y_hat, y.view(-1, 1))
+            l2_reg_loss = 0.0
+            for param in self.parameters():
+                l2_reg_loss += torch.norm(param, p=2)
+            loss += 1e-6 * l2_reg_loss
             self.log('train_loss', loss)
             return loss
 
         def validation_step(self, batch, batch_idx):
-            inputs, labels = batch
-            outputs = self(inputs)
-            loss = self.loss(outputs, labels.view(-1, 1))
+            x, y = batch
+            y_hat = self(x)
+            loss = self.loss(y_hat, y.view(-1, 1))
             self.log('val_loss', loss)
+            return loss
+
+        def test_step(self, batch, batch_idx):
+            x, y = batch
+            y_hat = self(x)
+            loss = self.loss(y_hat, y.view(-1, 1))
+            self.log('test_loss', loss)
+            return loss
 
         def configure_optimizers(self):
             optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
             return optimizer
-
-        def test_step(self, batch, batch_idx):
-            inputs, labels = batch
-            outputs = self(inputs)
-            loss = self.loss(outputs, labels.view(-1, 1))
-            self.log('test_loss', loss)
 
 
     # Load data into dataframe
@@ -84,7 +81,7 @@ if __name__ == '__main__':
     y = df['close'].values
     X = scaler.fit_transform(X)
     # Perform feature selection
-    k = 10 # Number of features to select
+    k = 15 # Number of features to select
     selector = SelectKBest(f_regression, k=k)
     X = selector.fit_transform(X, y)
     # Split the data into training, validation, and test sets
@@ -136,9 +133,9 @@ if __name__ == '__main__':
                                                       torch.tensor(y_fold_train, dtype=torch.float32).to(device))
                         val_dataset = TensorDataset(torch.tensor(X_fold_val, dtype=torch.float32).to(device),
                                                     torch.tensor(y_fold_val, dtype=torch.float32).to(device))
-                        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=4,
+                        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0 ,
                                                   pin_memory=False)
-                        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=4,
+                        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=0,
                                                 pin_memory=False)
 
                         model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
