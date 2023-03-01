@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 # Load data into dataframe
-df = pd.read_csv('BTC_USDT_5m_with_indicators.csv', header=0)
+df = pd.read_csv('BTC_USDT_1h_with_indicators.csv', header=0)
 
 column_names = df.columns
-
+print(df)
 # Print the column names
 print(f'Column names: {column_names}')
 # Get the values as a numpy array
@@ -39,4 +39,4 @@ print("Columns with NaN values:", cols_with_nan)
 #df = df.dropna(axis=1)
 
 # Save dataframe to CSV file
-df.to_csv('BTC_USDT_5m_with_indicators.csv', index=False)
+#df.to_csv('BTC_USDT_5m_with_indicators.csv', index=False)

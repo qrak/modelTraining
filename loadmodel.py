@@ -1,67 +1,53 @@
+from classdirectory.classfile import LSTMNet
 import ccxt
-import pandas as pd
-import pandas_ta as ta
-import numpy as np
-
 import torch
-from sklearn.preprocessing import StandardScaler
-from sklearn.feature_selection import SelectKBest, f_regression
+import pandas as pd
+import numpy as np
 from classdirectory.classfile import LSTMNet
 
-# Connect to the Binance exchange API
-exchange = ccxt.binance()
 
-# Define the number of historical candlesticks to retrieve
-num_candles = 1000
-
-# Retrieve the historical candlestick data
-ohlcv = exchange.fetch_ohlcv('BTC/USDT', '5m', limit=num_candles)
-
-# Convert the data to a pandas dataframe
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'], index=None)
-# Calculate technical indicators and add to dataframe
-df.ta.rsi(length=14, append=True)
-df.ta.cci(length=14, constant=0.015, append=True)
-df.ta.obv(append=True)
-df.ta.ppo(append=True)
-df.ta.macd(append=True)
-df.ta.mom(length=14, append=True)
-df.ta.fisher(length=14, append=True)
-df = df.replace([np.inf, -np.inf], np.nan).dropna(how='any')
-
+# Load the pre-trained model
+best_model_path = 'best_model.pt'
+best_model = LSTMNet(input_size=10, hidden_size=64, num_layers=2, output_size=1, dropout=0.1)
+best_model.load_state_dict(torch.load(best_model_path))
 scaler = StandardScaler()
-# Extract the target variable (close price)
-X = df.drop(['close', 'timestamp'], axis=1).values
-y = df['close'].values
-X = scaler.fit_transform(X)
-# Perform feature selection
-k = 15 # Number of features to select
-selector = SelectKBest(f_regression, k=k)
-X = selector.fit_transform(X, y)
-# Get the indices of the selected features
-selected_indices = selector.get_support(indices=True)
-# Get the names of the selected features
-feature_names = df.drop(['close', 'timestamp'], axis=1).columns
-selected_feature_names = feature_names[selected_indices]
-# Print the names of the selected features
-print(f"The top {k} selected features are:")
-for feature in selected_feature_names:
-    print(feature)
+# Load the test data
+test_data = pd.read_csv('BTC_USDT_5m_with_indicators2.csv', parse_dates=['timestamp']).tail(96)
+X_test = scaler.transform(test_data.drop(['timestamp', 'close'], axis=1))
+y_test = scaler.transform(test_data[['close']]).ravel()
 
-# Load the best model
-saved_model_path = 'best_model.pt'
-best_model = LSTMNet(input_size=15, hidden_size=32, num_layers=2, output_size=1, dropout=0.1)
-best_model.to(device)
+# Create a DataLoader for the test data
+test_dataset = torch.utils.data.TensorDataset(torch.tensor(X_test, dtype=torch.float32),
+                                              torch.tensor(y_test, dtype=torch.float32))
+test_data_loader = torch.utils.data.DataLoader(test_dataset, batch_size=96, shuffle=False)
 
-best_model.load_state_dict(torch.load(saved_model_path))
+# Put the model in evaluation mode
 best_model.eval()
 
-# Pass the preprocessed data through the model to get the predicted price
+# Generate predicted values for the test data
+y_pred = []
 with torch.no_grad():
-    X_tensor = torch.tensor(X, dtype=torch.float32).to(device)
-    y_pred = best_model(X_tensor)
-    y_pred = y_pred.cpu().numpy()
+    for x, y in test_data_loader:
+        y_pred_batch = best_model(x)
+        y_pred_batch = y_pred_batch.cpu().numpy()
+        y_pred.extend(y_pred_batch)
 
-# Print the predicted price
-print('Predicted price:', y_pred)
+# Inverse transform the predicted values using the y_scaler
+y_pred = y_scaler.inverse_transform(np.array(y_pred).reshape(-1, 1))
+
+# Load the last 96 candles from Binance using ccxt.simulated
+exchange = ccxt.simulated()
+symbol = 'BTC/USDT'
+timeframe = '5m'
+candles = exchange.fetch_ohlcv(symbol, timeframe, limit=96)
+candles_df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+candles_df['timestamp'] = pd.to_datetime(candles_df['timestamp'], unit='ms')
+
+# Calculate the predicted close using the last 96 candles and the predicted values from the model
+last_close = candles_df['close'].iloc[-1]
+predicted_close = y_pred[-1][0]
+
+# Print the last close, predicted close, and the difference between the two
+print(f"Last close: {last_close:.2f}")
+print(f"Predicted close: {predicted_close:.2f}")
+print(f"Difference: {predicted_close - last_close:.2f}")
