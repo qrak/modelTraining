@@ -1,67 +1,62 @@
 import torch
 import torch.nn as nn
-import os
+import torch.nn.functional as F
+import torch.optim as optim
+import pytorch_lightning as pl
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-class LSTMNet(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout=0.2):
+
+
+class LSTMNet(pl.LightningModule):
+    def __init__(self, input_size, hidden_size=32, num_layers=2, output_size=1, dropout=0.1):
         super().__init__()
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
-        self.dropout1 = nn.Dropout(dropout)
-        self.fc1 = nn.Linear(hidden_size, 64)
-        self.dropout2 = nn.Dropout(dropout)
-        self.fc2 = nn.Linear(64, output_size)
+
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout)
+        self.dropout = nn.Dropout(dropout)
+        self.fc1_linear = nn.Linear(hidden_size, 64)
+        self.bn1 = nn.BatchNorm1d(64)
+        self.fc2_linear = nn.Linear(64, output_size)
+        self.loss = nn.MSELoss()
+        self.l2_reg = nn.Linear(1, 1, bias=False)
 
     def forward(self, x):
-        out, _ = self.lstm(x.to(next(self.parameters()).device))
-        out = self.dropout1(out)
-        out = self.fc1(out[:, -1, :])
-        out = self.dropout2(out)
-        out = self.fc2(out)
-        return out.to(device)
+        output, _ = self.lstm(x)
+        output = self.dropout(output)
+        if len(output.shape) == 2:
+            output = output.unsqueeze(1)
+        output = output[:, -1, :]
+        output = self.fc1_linear(output)
+        output = self.bn1(output)
+        output = F.relu(output)
+        output = self.fc2_linear(output)
+        output = self.l2_reg(output)
+        return output
 
-    def evaluate(self, loader, criterion):
-        total_loss = 0.0
-        self.eval()
-        with torch.no_grad():
-            for inputs, labels in loader:
-                inputs, labels = inputs.to(device), labels.to(device)
-                outputs = self(inputs.unsqueeze(1))
-                loss = criterion(outputs, labels.view(-1, 1).to(device))
-                total_loss += loss.item()
-        return total_loss / len(loader)
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y.view(-1, 1))
+        l2_reg_loss = 0.0
+        for param in self.parameters():
+            l2_reg_loss += torch.norm(param, p=2)
+        loss += 1e-6 * l2_reg_loss
+        self.log('train_loss', loss)
+        return loss
 
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y.view(-1, 1))
+        self.log('val_loss', loss)
+        return loss
 
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y.view(-1, 1))
+        self.log('test_loss', loss)
+        return loss
 
-class EarlyStopping:
-    def __init__(self, patience=10, delta=0, verbose=False, path='saved_models/checkpoint.pt'):
-        self.patience = patience
-        self.delta = delta
-        self.verbose = verbose
-        self.path = path
-        self.counter = 0
-        self.best_score = None
-        self.early_stop = False
-
-    def __call__(self, val_loss, model):
-        if self.best_score is None:
-            self.best_score = val_loss
-            self.save_checkpoint(val_loss, model)
-        elif val_loss > self.best_score + self.delta:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-        else:
-            self.best_score = val_loss
-            self.save_checkpoint(val_loss, model)
-            self.counter = 0
-
-    def save_checkpoint(self, val_loss, model):
-        if self.verbose:
-            print(f'Validation loss decreased ({self.best_score:.6f} --> {val_loss:.6f}).  Saving model ...')
-
-        # create the saved_models directory if it doesn't exist
-        os.makedirs('saved_models', exist_ok=True)
-
-        # save the model in the saved_models directory
-        torch.save(model.state_dict(), self.path)
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        return optimizer

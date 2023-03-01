@@ -18,8 +18,8 @@ df.ta.mfi(append=True)
 
 sliced_rows = 50
 df = df.iloc[sliced_rows:]
-column_names = df.columns
 
+#column_names = df.columns
 
 # Save dataframe to CSV file
 df.to_csv('BTC_USDT_5m_with_indicators.csv', index=False)
