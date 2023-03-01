@@ -2,8 +2,10 @@ import ccxt
 import pandas as pd
 import time
 import os
+
+
 class CandleDownloader:
-    def __init__(self, exchange_name='binance', pair_name='BTC/USDT', timeframe='5m', start_time='2015-02-01T00:00:00Z', end_time=None, batch_size=1000, output_file=None):
+    def __init__(self, exchange_name='binance', pair_name='BTC/USDT', timeframe='1d', start_time='2015-01-01T00:00:00Z', end_time=None, batch_size=1000, output_file=None):
         self.exchange = getattr(ccxt, exchange_name)()
         self.pair_name = pair_name
         self.timeframe = timeframe
@@ -34,7 +36,7 @@ class CandleDownloader:
         # check if the file already exists
         try:
             df = pd.read_csv(self.output_file, usecols=[0], header=None)
-            self.start_time = df.iloc[-1, 0] + (self.exchange.parse_timeframe(self.timeframe) * 1000)
+            self.start_time = self.exchange.parse8601(df.iloc[-1, 0]) + (self.exchange.parse_timeframe(self.timeframe) * 1000)
             print(f"Resuming from timestamp {self.start_time}...")
         except (FileNotFoundError, pd.errors.EmptyDataError):
             self.start_time = self.exchange.parse8601(self.start_time)
@@ -66,25 +68,44 @@ class CandleDownloader:
                 self.total_batches += 1
                 print(f"Downloaded {self.total_candles} candles in {self.total_batches} batches...")
 
+                # write the accumulated data to the output file
+                if os.path.isfile(self.output_file):
+                    with open(self.output_file, mode='a', newline='') as f:
+                        if f.tell() == 0:
+                            df.to_csv(f, index=False, header=True)
+                        else:
+                            df.to_csv(f, index=False, header=False)
+                else:
+                    df.to_csv(self.output_file, index=False, header=True)
+
+                # clear the buffer
+                self.buffer = []
+
                 # pause for a short time to avoid request blocking
-                time.sleep(0.2)
+                #time.sleep(0.2)
 
             except Exception as e:
                 print(f"Exception occurred: {e}")
                 time.sleep(60)
 
-        # write the accumulated data to the output file
-        df = pd.concat(self.buffer)
+                # write the remaining data in the buffer to the output file
+            if len(self.buffer) > 0:
+                df = pd.concat(self.buffer)
 
-        # check if the file already exists
-        if os.path.isfile(self.output_file):
-          with open(self.output_file, 'a', newline='') as f:
-            df.to_csv(f, index=False, header=False)
-        else:
-            df.to_csv(self.output_file, index=False, header=False)
+                if os.path.isfile(self.output_file):
+                    with open(self.output_file, mode='a', newline='') as f:
+                        if f.tell() == 0:
+                            df.to_csv(f, index=False, header=True)
+                        else:
+                            df.to_csv(f, index=False, header=False)
+                else:
+                    df.to_csv(self.output_file, index=False, header=True)
 
-        # print a message when the script has finished
-        print(f'Download complete. Total candles: {self.total_candles}, Total batches: {self.total_batches}, Output file: {self.output_file}')
+                # print a message when the script has finished
+            print(
+                f'Download complete. Total candles: {self.total_candles}, Total batches: {self.total_batches}, Output file: {self.output_file}')
+
 
 candledownload = CandleDownloader()
 candledownload.download_candles()
+

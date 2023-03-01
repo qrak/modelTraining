@@ -9,81 +9,45 @@ from sklearn.model_selection import KFold, train_test_split
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.feature_selection import SelectKBest, f_regression
 from torch.utils.data import DataLoader, TensorDataset
-import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
 
     # Load data into dataframe
-    df = pd.read_csv('BTC_USDT_5m_with_indicators2.csv')
-    df = df.dropna()
-    df = df.replace([np.inf, -np.inf], np.nan).dropna(how='any')
+    data = pd.read_csv('BTC_USDT_5m_with_indicators2.csv', parse_dates=['timestamp'])
+    #data = pd.read_csv('csv/BTC_USDT_1m_2022-01-01_now_binance.csv', parse_dates=['timestamp'])
+    data = data.sort_values('timestamp')
+    data = data.reset_index(drop=True)
+    data = data[['open', 'high', 'low', 'close', 'volume']]
+    data = data.dropna()
+    data = data.replace([np.inf, -np.inf], np.nan).dropna(how='any')
 
-    scaler = MinMaxScaler()
-    # Extract the target variable (close price)
-    X = df.drop(['close', 'timestamp'], axis=1).values
-    y = df['close'].values
-    # Calculate F-values and p-values for each feature
-    f_values, p_values = f_regression(X, y)
+    scaler = StandardScaler()
+    # Extract the features and target variable
+    X = scaler.fit_transform(data.iloc[:, :-1])
+    y = data.iloc[:, -1].values
 
-    # Combine feature names, F-values, and p-values into a DataFrame
-    feature_names = df.drop(['close', 'timestamp'], axis=1).columns
-    feature_scores = pd.DataFrame({'Feature': feature_names, 'F-value': f_values, 'p-value': p_values})
-
-    # Sort the features by F-value in descending order
-    feature_scores = feature_scores.sort_values(by='F-value', ascending=False)
-
-    # Select the top k features based on F-value score
-    k = 10
-    selected_feature_names = feature_scores['Feature'].values[:k]
-
-    # Filter the data to include only the selected features
-    X = df[selected_feature_names].values
-
-    # Print the names of the selected features
-    print(f"The top {k} selected features are:")
-    for feature in selected_feature_names:
-        print(feature)
-    """
-    X = scaler.fit_transform(X)
-    # Perform feature selection
-    k = 15 # Number of features to select
-    selector = SelectKBest(f_regression, k=k)
-    X = selector.fit_transform(X, y)
-
-    X_selected = selector.fit_transform(X, y)
-
-    # Get the indices of the selected features
-    selected_indices = selector.get_support(indices=True)
-
-    # Get the names of the selected features
-    feature_names = df.drop(['close', 'timestamp'], axis=1).columns
-    selected_feature_names = feature_names[selected_indices]
-    # Print the names of the selected features
-    print(f"The top {k} selected features are:")
-    for feature in selected_feature_names:
-        print(feature)
-    """
-    # Plot the close price
-    X = scaler.fit_transform(X)
-    # Split the data into training, validation, and test sets
+    # Split the data into training and validation sets
     X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.25, shuffle=False)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, shuffle=False)
+
+    # Scale the target variable separately
+    y_scaler = StandardScaler()
+    y_train = y_scaler.fit_transform(y_train.reshape(-1, 1)).flatten()
+    y_val = y_scaler.transform(y_val.reshape(-1, 1)).flatten()
+    y_test = y_scaler.transform(y_test.reshape(-1, 1)).flatten()
+
     # Move the data to the specified device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    X_train = torch.tensor(X_train, dtype=torch.float32).to(device)
-    X_val = torch.tensor(X_val, dtype=torch.float32).to(device)
-    X_test = torch.tensor(X_test, dtype=torch.float32).to(device)
-    y_train = torch.tensor(y_train, dtype=torch.float32).to(device)
-    y_val = torch.tensor(y_val, dtype=torch.float32).to(device)
+
     # Define the number of folds for cross-validation
     num_folds = 2
 
     # Define the hyperparameters to search over
     input_sizes = [X.shape[1]]
     hidden_sizes = [32]
-    num_layers_list = [8]
-    dropout_sizes = [0.2]
+    num_layers_list = [2]
+    dropout_sizes = [0.1]
     torch.set_float32_matmul_precision('high')
     num_epochs = 100
     best_val_loss = float('inf')
@@ -104,27 +68,27 @@ if __name__ == '__main__':
                     kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
                     best_fold_val_loss = float('inf')
                     best_val_losses = []
-                    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train_val)):
+                    for fold, (train_idx, val_idx) in enumerate(kf.split(X_train)):
                         print(f"Fold {fold + 1}/{num_folds}")
                         # Split the data into training and validation sets for this fold
-                        X_fold_train, y_fold_train = X_train_val[train_idx], y_train_val[train_idx]
-                        X_fold_val, y_fold_val = X_train_val[val_idx], y_train_val[val_idx]
+                        X_fold_train, y_fold_train = X_train[train_idx], y_train[train_idx]
+                        X_fold_val, y_fold_val = X_train[val_idx], y_train[val_idx]
 
                         # Create the PyTorch datasets and data loaders
                         train_dataset = TensorDataset(torch.tensor(X_fold_train, dtype=torch.float32).to(device),
                                                       torch.tensor(y_fold_train, dtype=torch.float32).to(device))
                         val_dataset = TensorDataset(torch.tensor(X_fold_val, dtype=torch.float32).to(device),
                                                     torch.tensor(y_fold_val, dtype=torch.float32).to(device))
-                        train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0 ,
+                        train_loader = DataLoader(train_dataset, batch_size=96, shuffle=True, num_workers=0,
                                                   pin_memory=False)
-                        val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=0,
+                        val_loader = DataLoader(val_dataset, batch_size=96, shuffle=False, num_workers=0,
                                                 pin_memory=False)
 
                         model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
                                         output_size=1, dropout=dropout_size).to(device)
 
                         # Initialize the EarlyStopping callback
-                        early_stopping = pl.callbacks.EarlyStopping(patience=25, monitor='val_loss')
+                        early_stopping = pl.callbacks.EarlyStopping(patience=20, monitor='val_loss')
 
                         # Train the model
                         trainer = pl.Trainer(max_epochs=num_epochs, accelerator='gpu', devices=1, callbacks=[early_stopping])
@@ -158,15 +122,17 @@ if __name__ == '__main__':
                         best_hyperparams = (input_size, hidden_size, num_layers, dropout_size)
 
     # Train the best model on the full training set and evaluate it on the test set
-    early_stopping = pl.callbacks.EarlyStopping(patience=10, monitor='val_loss')
+    early_stopping = pl.callbacks.EarlyStopping(patience=20, monitor='val_loss')
     trainer = pl.Trainer(max_epochs=num_epochs, accelerator='gpu', devices=1, callbacks=[early_stopping])
     trainer.fit(best_model, train_loader, val_loader)
 
     # Evaluate the best model on the test set
     y_test = torch.from_numpy(y_test).float()
     y_test = y_test.view(-1, 1)
-    test_loader = DataLoader(TensorDataset(X_test, y_test), batch_size=64, shuffle=False)
-    test_loss = trainer.test(best_model, test_loader)[0]['test_loss']
+    test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32).to(device),
+                                torch.tensor(y_test, dtype=torch.float32).to(device))
+    test_data_loader = DataLoader(test_dataset, batch_size=96, shuffle=False)
+    test_loss = trainer.test(best_model, test_data_loader)[0]['test_loss']
 
 
     print(

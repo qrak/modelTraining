@@ -58,5 +58,5 @@ class LSTMNet(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = optim.RMSprop(self.parameters(), lr=1e-3)
         return optimizer
