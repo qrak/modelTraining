@@ -15,17 +15,16 @@ if __name__ == '__main__':
 
     # Load data into dataframe
     data = pd.read_csv('BTC_USDT_5m_with_indicators2.csv', parse_dates=['timestamp'])
-    #data = pd.read_csv('csv/BTC_USDT_1m_2022-01-01_now_binance.csv', parse_dates=['timestamp'])
-    data = data.sort_values('timestamp')
-    data = data.reset_index(drop=True)
-    data = data[['open', 'high', 'low', 'close', 'volume']]
+    # data = pd.read_csv('csv/BTC_USDT_1m_2022-01-01_now_binance.csv', parse_dates=['timestamp'])
+
+    # Drop any rows with missing values, NaN or infinity
     data = data.dropna()
     data = data.replace([np.inf, -np.inf], np.nan).dropna(how='any')
 
-    scaler = StandardScaler()
     # Extract the features and target variable
-    X = scaler.fit_transform(data.iloc[:, :-1])
-    y = data.iloc[:, -1].values
+    scaler = StandardScaler()
+    X = scaler.fit_transform(data.drop(['timestamp', 'close'], axis=1))
+    y = scaler.fit_transform(data[['close']]).ravel()
 
     # Split the data into training and validation sets
     X_train_val, X_test, y_train_val, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
@@ -45,7 +44,7 @@ if __name__ == '__main__':
 
     # Define the hyperparameters to search over
     input_sizes = [X.shape[1]]
-    hidden_sizes = [32]
+    hidden_sizes = [64]
     num_layers_list = [2]
     dropout_sizes = [0.1]
     torch.set_float32_matmul_precision('high')
