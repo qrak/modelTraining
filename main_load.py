@@ -14,7 +14,7 @@ if __name__ == '__main__':
     exchange = ccxt.binance()
     symbol = 'BTC/USDT'
     timeframe = '1h'
-    limit = 5000  # Maximum value allowed by Binance
+    limit = 1000  # Maximum value allowed by Binance
     candles = []
 
     while True:
@@ -54,8 +54,8 @@ if __name__ == '__main__':
 
     # Scale the data
     # Load the pre-trained model
-    best_model_path = 'best_model29_96_8_0.1.pt'
-    best_model = LSTMNet(input_size=29, hidden_size=96, num_layers=8, output_size=1, dropout=0.1)
+    best_model_path = 'save/best_model_29_64_4_0.1.pt'
+    best_model = LSTMNet(input_size=29, hidden_size=64, num_layers=4, output_size=1, dropout=0.1)
     best_model.load_state_dict(torch.load(best_model_path))
 
     scaler = StandardScaler()

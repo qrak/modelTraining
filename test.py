@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from torch.utils.data import DataLoader, TensorDataset
-from classdirectory.classfile_test import LSTMNet
+from classdirectory.classfile import LSTMNet
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     # Define the hyperparameters to search over
     input_size = (X.shape[1])
-    hidden_size = 32
+    hidden_size = 64
     num_layers = 4
     dropout_size = 0.1
     torch.set_float32_matmul_precision('high')
@@ -42,6 +42,7 @@ if __name__ == '__main__':
     test_data_loader = DataLoader(test_dataset, batch_size=96, shuffle=False)
 
     # Load the best model
+    #best_model_path = f"save/best_model_{input_size}_{hidden_size}_{num_layers}_{dropout_size}.pt"
     best_model_path = f"save/best_model_{input_size}_{hidden_size}_{num_layers}_{dropout_size}.pt"
     best_model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, output_size=1,
                          dropout=dropout_size)
@@ -67,12 +68,20 @@ if __name__ == '__main__':
     y_test_pred = np.concatenate(y_test_pred)
 
     # Create a new StandardScaler object and fit it on the un-scaled data
+    data = data.iloc[::-1]
     scaler = StandardScaler()
     scaler.fit(data[["close"]].values)
 
     # Inverse transform the predicted values using the new scaler object
     y_test_pred = scaler.inverse_transform(y_test_pred)
 
+    # Reverse the y_test_pred list
+    y_test_pred = y_test_pred[::-1]
     # Print the last 10 values of 'close' and 'predicted close'
-    for i in range(-10, 0):
-        print(f"Actual close: {data.iloc[i]['close']:.2f}, Predicted close: {y_test_pred[i][0]:.2f}")
+
+    for i in range(100):
+        actual_close = data.iloc[i]['close']
+        predicted_close = y_test_pred[i][0]
+        abs_percentage_error = abs(predicted_close - actual_close) / actual_close * 100
+        print(f"Actual close: {actual_close:.2f}, Predicted close: {predicted_close:.2f}, "
+              f"Absolute Percentage Error: {abs_percentage_error:.2f}%")

@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from torch.utils.data import DataLoader, TensorDataset
-from classdirectory.classfile_test import LSTMNet
+from classdirectory.classfile import LSTMNet
 #import torch.optim as optim
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -45,11 +45,11 @@ if __name__ == '__main__':
 
     # Define the hyperparameters to search over
     input_size = (X_train.shape[1])
-    hidden_size = 16
-    num_layers = 4
+    hidden_size = 64
+    num_layers = 16
     dropout_size = 0.1
     #torch.set_float32_matmul_precision('high')
-    num_epochs = 100
+    num_epochs = 200
 
     print(
         f"Training model with input_size={input_size}, hidden_size={hidden_size}, num_layers={num_layers}, dropout={dropout_size}")
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                     output_size=1, dropout=dropout_size).to(device)
 
     # Initialize the EarlyStopping callback and the ModelCheckpoint callback
-    early_stopping = pl.callbacks.EarlyStopping(patience=20, monitor='val_loss')
+    early_stopping = pl.callbacks.EarlyStopping(patience=50, monitor='val_loss')
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',
         dirpath='checkpoints/',
