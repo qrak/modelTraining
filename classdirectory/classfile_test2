@@ -31,26 +31,27 @@
             output, _ = self.attn(output, output, output)
             output = output.squeeze(0)
             output = self.fc4_linear(output)
+            output = output.view(-1)  # add this line to reshape output to have shape [batch_size]
             return output
 
         def training_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1, 1))
+            loss = self.loss(y_hat, y.view(-1))
             self.log('train_loss', loss)
             return loss
 
         def validation_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1, 1))
+            loss = self.loss(y_hat, y.view(-1))
             self.log('val_loss', loss)
             return loss
 
         def test_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1, 1))
+            loss = self.loss(y_hat, y.view(-1))
             self.log('test_loss', loss)
             return loss
 
@@ -58,4 +59,3 @@
             optimizer = optim.Adagrad(self.parameters(), lr=1e-3, weight_decay=self.weight_decay)
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
             return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': 'val_loss'}
-
