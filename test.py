@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 
 from torch.utils.data import DataLoader, TensorDataset
-from classdirectory.classfile import LSTMNet
+from classdirectory.classfile_test import LSTMNet
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -16,22 +16,28 @@ if __name__ == '__main__':
 
     data = pd.read_csv('BTC_USDT_1h_with_indicators.csv', parse_dates=['timestamp'])
     # Select the first 100 rows of the DataFrame
-    scaler = StandardScaler()
-    X = data.drop(['timestamp', 'close'], axis=1)
-    y = data[['close']]
-    Xy = scaler.fit_transform(pd.concat([X, y], axis=1))
-
-    X_train_val, X_test, y_train_val, y_test = train_test_split(Xy[:, :-1], Xy[:, -1], test_size=0.2, shuffle=False,
+    # Separate the features and target
+    features = data.drop(['timestamp', 'close'], axis=1)
+    target = data['close'].values.reshape(-1, 1)
+    # Initialize the scaler
+    scaler = MinMaxScaler()
+    scaler_target = MinMaxScaler()
+    # Fit the scaler to the features
+    scaler.fit(features)
+    scaler_target.fit(target)
+    # Scale the features
+    scaled_features = scaler.transform(features)
+    scaled_target = scaler_target.transform(target)
+    # Split the data into training and testing sets
+    X_train_val, X_test, y_train_val, y_test = train_test_split(scaled_features, scaled_target, test_size=0.2,
                                                                 random_state=42)
-    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, shuffle=False,
-                                                      random_state=42)
-
+    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, random_state=42)
     # Define the hyperparameters to search over
-    input_size = (X.shape[1])
-    hidden_size = 64
+    input_size = (X_train.shape[1])
+    hidden_size = 8
     num_layers = 4
     dropout_size = 0.1
-    torch.set_float32_matmul_precision('high')
+    #torch.set_float32_matmul_precision('high')
 
     print(
         f"Loading model with input_size={input_size}, hidden_size={hidden_size}, num_layers={num_layers}, dropout={dropout_size}")
@@ -69,11 +75,11 @@ if __name__ == '__main__':
 
     # Create a new StandardScaler object and fit it on the un-scaled data
     data = data.iloc[::-1]
-    scaler = StandardScaler()
+    scaler = MinMaxScaler()
     scaler.fit(data[["close"]].values)
 
     # Inverse transform the predicted values using the new scaler object
-    y_test_pred = scaler.inverse_transform(y_test_pred)
+    y_test_pred = scaler.inverse_transform(y_test_pred.reshape(-1, 1))
 
     # Reverse the y_test_pred list
     y_test_pred = y_test_pred[::-1]

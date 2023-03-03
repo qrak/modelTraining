@@ -3,10 +3,11 @@ import torch
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+from torch.utils.data import DataLoader, TensorDataset
+from classdirectory.classfile_test import LSTMNet
 
-from classdirectory.classfile import LSTMNet
-
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 if __name__ == '__main__':
 
@@ -48,47 +49,48 @@ if __name__ == '__main__':
     candles_df.ta.adx(length=14, append=True)
     sliced_rows = 150
     df = candles_df.iloc[sliced_rows:]
-    df = df.drop(['timestamp', 'close'], axis=1)
+    df = df.drop('timestamp', axis=1)
+
     # Print the column names of the df DataFrame
-    print(df.columns)
 
-    # Scale the data
+    # Convert the DataFrame to a PyTorch DataLoader
+    batch_size = 64
+
+    # Pass only the technical indicators and other features to the first tensor, and not the target variable ('close')
+    inputs = torch.tensor(df.drop('close', axis=1).values, dtype=torch.float32)
+    labels = torch.tensor(df['close'].values, dtype=torch.float32).to(
+        device)  # Move the target tensor to the same device as the input tensor
+    dataset = TensorDataset(inputs, labels)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
     # Load the pre-trained model
-    best_model_path = 'save/best_model_29_64_4_0.1.pt'
-    best_model = LSTMNet(input_size=29, hidden_size=64, num_layers=4, output_size=1, dropout=0.1)
+    best_model_path = 'save/best_model_29_8_4_0.1.pt'
+    best_model = LSTMNet(input_size=29, hidden_size=8, num_layers=4, output_size=1, dropout=0.1)
+    # Move the model to the same device as the input tensor
+    best_model.to(device)
     best_model.load_state_dict(torch.load(best_model_path))
+    target = candles_df['close'].values.reshape(-1, 1)
 
-    scaler = StandardScaler()
-    ta_df_scaled = scaler.fit_transform(df)
 
-    # Reshape the data to be compatible with the model
-    num_rows, num_cols = ta_df_scaled.shape
-    ta_tensor = torch.tensor(ta_df_scaled, dtype=torch.float32).view(1, num_rows, num_cols)
-
-    # Put the model in evaluation mode
-    best_model.eval()
-
-    # Generate predicted values for the test data
+    # Make predictions on the test set using the best model
+    # Make predictions on the test set using the best model
     with torch.no_grad():
-        y_pred = best_model(ta_tensor)
+        best_model.eval()
+        # Pass the input tensor `inputs` to the LSTM model instead of `candles_df`
+        y_pred = best_model(inputs.to(device)).cpu().numpy()
 
-    print("Shape of y_pred:", y_pred.shape)
-    # Manually scale the predicted value using the same mean and standard deviation as the scaler
-    #y_pred = y_pred.cpu().numpy().squeeze()
-    y_pred_np = y_pred.cpu().numpy()
-    num_rows = ta_tensor.shape[1] - 20
+    # Inverse transform the predicted and actual close values
+    scaler = MinMaxScaler()
+    # Fit the scaler on the training data
+    scaler.fit(inputs_train.numpy())
+    # Scale the inputs and labels for both training and testing
+    inputs_train = scaler.transform(inputs_train.numpy())
+    inputs_test = scaler.transform(inputs_test.numpy())
+    labels_train = scaler.transform(labels_train.numpy())
+    labels_test = scaler.transform(labels_test.numpy())
+    y_pred = scaler.inverse_transform(y_pred)
 
-    y_pred_scaled = (y_pred_np * scaler.scale_[0]) + scaler.mean_[0]
-    y_pred_scaled = y_pred_scaled.reshape(-1)
+    # Create a DataFrame with the actual and predicted close values for the test set
+    test_df = pd.DataFrame({'Actual Close': df['close'], 'Predicted Close': y_pred.flatten()})
+    print(test_df)
 
-    # Print the shape of y_pred_scaled
-    print("Shape of y_pred_scaled:", y_pred_scaled.shape)
-
-    # Print the predictions for the next 20 candles
-    last_close = candles_df['close'].iloc[-1]
-    print(f"Last close: {last_close:.2f}")
-    for i in range(1, len(y_pred_scaled) + 1):
-        predicted_close = y_pred_scaled[i - 1]
-        print(f"Predicted close for candle {i}: {float(predicted_close):.2f}")
-        print(f"Difference for candle {i}: {float(predicted_close - last_close):.2f}")
-        last_close = predicted_close
