@@ -45,8 +45,8 @@
             x, y = batch
             y_hat = self(x)
             loss = self.loss(y_hat, y.view(-1))
-            self.log('val_loss', loss)
-            return loss
+            return {'val_loss': loss}
+
 
         def test_step(self, batch, batch_idx):
             x, y = batch
@@ -59,3 +59,9 @@
             optimizer = optim.Adagrad(self.parameters(), lr=1e-3, weight_decay=self.weight_decay)
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
             return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': 'val_loss'}
+        def validation_epoch_end(self, outputs):
+            if not outputs:
+                return {}
+            losses = [x.get('val_loss', 0) for x in outputs]
+            avg_loss = torch.stack(losses).mean()
+            self.log('val_loss', avg_loss)
