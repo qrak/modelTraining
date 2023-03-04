@@ -12,6 +12,8 @@ import pytorch_lightning as pl
 
 if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
     class BitcoinPredictor(pl.LightningModule):
         def __init__(self, input_size, hidden_size=32, num_layers=2, output_size=1, dropout=0.2):
             super().__init__()
@@ -21,12 +23,11 @@ if __name__ == '__main__':
             self.dropout = nn.Dropout(dropout)
             self.fc1_linear = nn.Linear(hidden_size, 64)
             self.bn1 = nn.BatchNorm1d(64)
-            self.fc2_linear = nn.Linear(64, 16)
-            self.fc3_linear = nn.Linear(16, 16)
-            self.attn = nn.MultiheadAttention(16, num_heads=4)
-            self.fc4_linear = nn.Linear(16, 1)
+            self.fc2_linear = nn.Linear(64, output_size)  # update fc2_linear
+            self.attn = nn.MultiheadAttention(output_size, num_heads=1)  # update attn
             self.loss = nn.MSELoss()
             self.weight_decay = 1e-3
+            self.output_size = output_size
 
         def forward(self, x):
             output, _ = self.lstm(x)
@@ -38,23 +39,20 @@ if __name__ == '__main__':
             output = self.bn1(output)
             output = nn.functional.relu(output)
             output = output.view(output.size(0), -1)
-            output = self.fc2_linear(output)
+            output = self.fc2_linear(output)  # update fc2_linear
             output = nn.functional.relu(output)
-            output = self.fc3_linear(output)
             output = output.unsqueeze(0)
-            output = output.permute(1, 0,
-                                    2)  # change from [batch, seq_len, hidden_size] to [seq_len, batch, hidden_size]
+            output = output.permute(1, 0, 2)
             output, _ = self.attn(output, output, output)
             output = output.squeeze(0)
-            output = self.fc4_linear(output)
-            output = output.view(-1)  # add this line to reshape output to have shape [batch_size]
+            output = output.view(-1, self.output_size)
             return output
 
         def training_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1))
-            mae = nn.functional.l1_loss(y_hat, y.view(-1))
+            loss = self.loss(y_hat, y.view(-1, 1))
+            mae = nn.functional.l1_loss(y_hat, y.view(-1, 1))
             rmse = torch.sqrt(loss)
             lr = self.trainer.optimizers[0].param_groups[0]['lr']
             self.log('train_loss', loss, prog_bar=True)
@@ -66,8 +64,8 @@ if __name__ == '__main__':
         def validation_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1))
-            mae = nn.functional.l1_loss(y_hat, y.view(-1))
+            loss = self.loss(y_hat, y.view(-1, 1))
+            mae = nn.functional.l1_loss(y_hat, y.view(-1, 1))
             rmse = torch.sqrt(loss)
             self.log('val_loss', loss, prog_bar=True)
             self.log('val_mae', mae, prog_bar=True)
@@ -77,7 +75,7 @@ if __name__ == '__main__':
         def test_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1))
+            loss = self.loss(y_hat, y.view(-1, 1))
             self.log('test_loss', loss)
             return loss
 
@@ -174,4 +172,5 @@ if __name__ == '__main__':
     model.train()
 
     y_new_pred = model.scaler.inverse_transform(y_new_pred.cpu().numpy())
+    print(y_new_pred)
 
