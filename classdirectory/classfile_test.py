@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 #import torch.nn.functional as F
 import torch.optim as optim
@@ -44,14 +45,24 @@ class LSTMNet(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y.view(-1))
-        self.log('train_loss', loss)
+        mae = nn.functional.l1_loss(y_hat, y.view(-1))
+        rmse = torch.sqrt(loss)
+        lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        self.log('train_loss', loss, prog_bar=True)
+        self.log('train_mae', mae, prog_bar=True)
+        self.log('train_rmse', rmse, prog_bar=True)
+        self.log('learning_rate', lr, on_epoch=True, on_step=False)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y.view(-1))
-        self.log('val_loss', loss)
+        mae = nn.functional.l1_loss(y_hat, y.view(-1))
+        rmse = torch.sqrt(loss)
+        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_mae', mae, prog_bar=True)
+        self.log('val_rmse', rmse, prog_bar=True)
         return {'val_loss': loss}
 
     def test_step(self, batch, batch_idx):
@@ -63,6 +74,6 @@ class LSTMNet(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adagrad(self.parameters(), lr=1e-3, weight_decay=self.weight_decay)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20, verbose=True)
         return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': 'val_loss'}
 

@@ -54,14 +54,24 @@ if __name__ == '__main__':
             x, y = batch
             y_hat = self(x)
             loss = self.loss(y_hat, y.view(-1))
-            self.log('train_loss', loss)
+            mae = nn.functional.l1_loss(y_hat, y.view(-1))
+            rmse = torch.sqrt(loss)
+            lr = self.trainer.optimizers[0].param_groups[0]['lr']
+            self.log('train_loss', loss, prog_bar=True)
+            self.log('train_mae', mae, prog_bar=True)
+            self.log('train_rmse', rmse, prog_bar=True)
+            self.log('learning_rate', lr, on_epoch=True, on_step=False)
             return loss
 
         def validation_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
             loss = self.loss(y_hat, y.view(-1))
-            self.log('val_loss', loss)
+            mae = nn.functional.l1_loss(y_hat, y.view(-1))
+            rmse = torch.sqrt(loss)
+            self.log('val_loss', loss, prog_bar=True)
+            self.log('val_mae', mae, prog_bar=True)
+            self.log('val_rmse', rmse, prog_bar=True)
             return {'val_loss': loss}
 
         def test_step(self, batch, batch_idx):
@@ -136,7 +146,7 @@ if __name__ == '__main__':
     model.to(device)
 
     # Define the ModelCheckpoint callback
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss', mode='min')
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=1)
 
     # Train the model
     trainer = pl.Trainer(accelerator='gpu' if torch.cuda.is_available() else None, max_epochs=250, callbacks=[checkpoint_callback])
