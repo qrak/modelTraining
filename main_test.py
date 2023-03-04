@@ -60,6 +60,7 @@ if __name__ == '__main__':
 
         model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
                         output_size=1, dropout=dropout_size).to(device)
+        model.to(device)
 
         # Initialize the EarlyStopping callback and the ModelCheckpoint callback
         early_stopping = pl.callbacks.EarlyStopping(patience=50, monitor='val_loss')

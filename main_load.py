@@ -133,10 +133,6 @@ if __name__ == '__main__':
     dropout_size = 0.1
 
 
-    model = LSTMNet(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
-                    output_size=1, dropout=dropout_size).to(device)
-
-
     best_model_path = f"save/best_model_{input_size}_{hidden_size}_{num_layers}_{dropout_size}.pt"
     os.makedirs(os.path.dirname(best_model_path), exist_ok=True)
 
@@ -161,6 +157,7 @@ if __name__ == '__main__':
             inputs = inputs.to(device)
             outputs = best_model(inputs)
             predicted_prices.extend(outputs.cpu().numpy())
+
 
     # Get the actual close prices from the test set
     actual_prices = scaler_target.inverse_transform(y_test).flatten()
