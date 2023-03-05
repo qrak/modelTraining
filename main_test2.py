@@ -8,6 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 import torch.nn.functional as F
 
@@ -136,10 +137,11 @@ if __name__ == '__main__':
         save_top_k=1,
         mode='min'
     )
+    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=10, mode="min")
 
     # train model
     trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
-                         callbacks=[checkpoint_callback])
+                         callbacks=[checkpoint_callback, early_stopping_callback])
     trainer.fit(model, train_loader, val_loader)
 
     # switch to evaluation mode
