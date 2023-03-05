@@ -1,176 +1,167 @@
-import pandas as pd
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from pytorch_lightning.loggers import TensorBoardLogger
 import pytorch_lightning as pl
+import torch.nn.functional as F
 
 
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
 
-    class BitcoinPredictor(pl.LightningModule):
-        def __init__(self, input_size, hidden_size=32, num_layers=2, output_size=1, dropout=0.2):
+    class LSTMRegressor(pl.LightningModule):
+        def __init__(self, input_size, hidden_size, num_layers, output_size, learning_rate=1e-3, weight_decay=0.0,
+                     dropout=0.0):
             super().__init__()
-
-            self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True,
-                                dropout=dropout)
+            self.hidden_size = hidden_size
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+            self.dense = nn.Linear(hidden_size, hidden_size)
+            self.fc = nn.Linear(hidden_size, output_size)
+            self.learning_rate = learning_rate
+            self.weight_decay = weight_decay
             self.dropout = nn.Dropout(dropout)
-            self.fc1_linear = nn.Linear(hidden_size, 64)
-            self.bn1 = nn.BatchNorm1d(64)
-            self.fc2_linear = nn.Linear(64, output_size)  # update fc2_linear
-            self.attn = nn.MultiheadAttention(output_size, num_heads=1)  # update attn
-            self.loss = nn.MSELoss()
-            self.weight_decay = 1e-3
-            self.output_size = output_size
+            self.l1 = nn.L1Loss()
 
         def forward(self, x):
-            output, _ = self.lstm(x)
-            output = self.dropout(output)
-            if len(output.shape) == 2:
-                output = output.unsqueeze(1)
-            output = output[:, -1, :]
-            output = self.fc1_linear(output)
-            output = self.bn1(output)
-            output = nn.functional.relu(output)
-            output = output.view(output.size(0), -1)
-            output = self.fc2_linear(output)  # update fc2_linear
-            output = nn.functional.relu(output)
-            output = output.unsqueeze(0)
-            output = output.permute(1, 0, 2)
-            output, _ = self.attn(output, output, output)
-            output = output.squeeze(0)
-            output = output.view(-1, self.output_size)
+            batch_size = x.shape[0]
+            lstm_out, (h_n, c_n) = self.lstm(x)
+            # Reshape the output of the LSTM layer to (batch_size, hidden_size)
+            lstm_out = lstm_out.unsqueeze(dim=1)
+            lstm_out = lstm_out[:, -1, :].view(batch_size, self.lstm.hidden_size)
+            lstm_out = self.dropout(lstm_out)
+            dense_out = F.relu(self.dense(lstm_out))
+            dense_out = self.dropout(dense_out)
+            output = self.fc(dense_out)
             return output
 
         def training_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1, 1))
-            mae = nn.functional.l1_loss(y_hat, y.view(-1, 1))
-            rmse = torch.sqrt(loss)
-            lr = self.trainer.optimizers[0].param_groups[0]['lr']
+            l1_regularization = self.l1(self.fc.weight, torch.zeros_like(self.fc.weight))
+            loss = nn.MSELoss()(y_hat, y.view(-1, 1)) + self.weight_decay * l1_regularization
             self.log('train_loss', loss, prog_bar=True)
-            self.log('train_mae', mae, prog_bar=True)
-            self.log('train_rmse', rmse, prog_bar=True)
-            self.log('learning_rate', lr, on_epoch=True, on_step=False)
-            return loss
+            return {'loss': loss, 'y_hat': y_hat, 'y': y}
 
         def validation_step(self, batch, batch_idx):
             x, y = batch
             y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1, 1))
-            mae = nn.functional.l1_loss(y_hat, y.view(-1, 1))
-            rmse = torch.sqrt(loss)
+            mse_loss = nn.MSELoss()(y_hat, y.view(-1, 1))
+            l1_regularization = self.weight_decay * torch.norm(self.fc.weight, p=1)
+            loss = mse_loss + l1_regularization
             self.log('val_loss', loss, prog_bar=True)
-            self.log('val_mae', mae, prog_bar=True)
-            self.log('val_rmse', rmse, prog_bar=True)
-            return {'val_loss': loss}
+            return {'loss': loss, 'y_hat': y_hat, 'y': y}
 
-        def test_step(self, batch, batch_idx):
-            x, y = batch
-            y_hat = self(x)
-            loss = self.loss(y_hat, y.view(-1, 1))
-            self.log('test_loss', loss)
-            return loss
+        def training_epoch_end(self, outputs):
+            avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
+            self.log('train_loss_epoch', avg_loss, prog_bar=True)
+
+        def validation_epoch_end(self, outputs):
+            avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
+            self.log('val_loss_epoch', avg_loss, prog_bar=True)
 
         def configure_optimizers(self):
-            optimizer = optim.Adagrad(self.parameters(), lr=1e-3, weight_decay=self.weight_decay)
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=20,
-                                                             verbose=True)
-            return {'optimizer': optimizer, 'lr_scheduler': scheduler, 'monitor': 'val_loss'}
+            optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=2)
+            return {
+                'optimizer': optimizer,
+                'lr_scheduler': scheduler,
+                'monitor': 'val_loss'
+            }
 
-        def prepare_data(self):
-            # Load the CSV file into a Pandas dataframe
-            df = pd.read_csv('BTC_USDT_1h_with_indicators.csv')
 
-            # Convert the date column to a datetime object
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    # load data
+    df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
+    # Convert the date column to a datetime object
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
 
-            # Set the date column as the index
-            df.set_index('timestamp', inplace=True)
+    # Set the date column as the index
+    df.set_index('timestamp', inplace=True)
 
-            # Normalize the data using the min-max scaler
-            self.scaler = MinMaxScaler()
+    features = df.drop(['close'], axis=1).values
+    labels = df['close'].values.reshape(-1, 1)
 
-            df_norm = pd.DataFrame(self.scaler.fit_transform(df), columns=df.columns, index=df.index)
+    # scale data
+    scaler = MinMaxScaler()
+    features_scaled = scaler.fit_transform(features)
+    labels_scaled = scaler.fit_transform(labels)
 
-            # Convert the dataframe to PyTorch tensors
-            X = torch.Tensor(df_norm.drop(columns=['close']).values)
-            y = torch.Tensor(df_norm['close'].values).reshape(-1, 1)
+    # split dataset into train, val and test sets
+    X_train_val, X_test, y_train_val, y_test = train_test_split(features_scaled, labels_scaled, test_size=0.2,
+                                                                random_state=42, shuffle=False)
 
-            # Split the data into training, validation, and testing sets
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-            X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.2, shuffle=False)
+    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.25, random_state=42,
+                                                      shuffle=False)
 
-            # Move the datasets to the device
+    # convert to tensors
+    features_train_tensor = torch.tensor(X_train, dtype=torch.float32).to(device)
+    labels_train_tensor = torch.tensor(y_train, dtype=torch.float32).to(device)
+    features_val_tensor = torch.tensor(X_val, dtype=torch.float32).to(device)
+    labels_val_tensor = torch.tensor(y_val, dtype=torch.float32).to(device)
+    features_test_tensor = torch.tensor(X_test, dtype=torch.float32).to(device)
+    labels_test_tensor = torch.tensor(y_test, dtype=torch.float32).to(device)
 
-            self.train_set = TensorDataset(X_train.to(device), y_train.to(device))
-            self.val_set = TensorDataset(X_val.to(device), y_val.to(device))
-            self.test_set = TensorDataset(X_test.to(device), y_test.to(device))
+    # create datasets
+    train_dataset = TensorDataset(features_train_tensor, labels_train_tensor)
+    val_dataset = TensorDataset(features_val_tensor, labels_val_tensor)
+    test_dataset = TensorDataset(features_test_tensor, labels_test_tensor)
 
-            # Create PyTorch datasets
-            self.train_set = TensorDataset(X_train, y_train)
-            self.val_set = TensorDataset(X_val, y_val)
-            self.test_set = TensorDataset(X_test, y_test)
+    # create dataloaders
+    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=20)
+    test_loader = DataLoader(test_dataset, batch_size=20)
 
-        def setup(self, stage=None):
-            self.prepare_data()
+    # create model
+    input_size = features.shape[1]
+    hidden_size = 20
+    num_layers = 2
+    output_size = 1
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    learning_rate = 1e-3
+    weight_decay = 1e-4
+    dropout = 0.2
 
-        def __dataloader(self, train):
-            if train:
-                loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True, num_workers=8)
-            else:
-                loader = DataLoader(self.test_set, batch_size=self.batch_size, shuffle=False, num_workers=8)
-            return loader
+    model = LSTMRegressor(input_size, hidden_size, num_layers, output_size,
+                          learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout).to(device)
 
-        def train_dataloader(self):
-            return self.__dataloader(train=True)
+    # train model
+    trainer = pl.Trainer(max_epochs=5, accelerator="gpu" if torch.cuda.is_available() else 0)
+    trainer.fit(model, train_loader, val_loader)
 
-        def val_dataloader(self):
-            return self.__dataloader(train=False)
-
-        def test_dataloader(self):
-            return self.__dataloader(train=False)
-
-    # Instantiate the model
-    model = BitcoinPredictor(input_size=29, hidden_size=64, num_layers=3, output_size=1, dropout=0.2)
-    model.batch_size = 32
+    # switch to evaluation mode
+    model.eval()
     model.to(device)
 
-    # Define the ModelCheckpoint callback
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss', mode='min', save_top_k=1)
-
-    # Train the model
-    trainer = pl.Trainer(accelerator='gpu' if torch.cuda.is_available() else None, max_epochs=250, callbacks=[checkpoint_callback])
-    trainer.fit(model)
-
-    # Test the model
-    trainer.test(ckpt_path='best')
-
-    # Make predictions on new data
-    new_data = pd.read_csv('BTC_USDT_1h_with_indicators.csv')
-
-    new_data['timestamp'] = pd.to_datetime(new_data['timestamp'], unit='ms')
-
-    new_data.set_index('timestamp', inplace=True)
-
-    new_data_norm = pd.DataFrame(model.scaler.transform(new_data), columns=new_data.columns, index=new_data.index)
-
-    X_new = torch.Tensor(new_data_norm.drop(columns=['close']).values)
-
-    model.eval()
+    # make predictions on test set
+    test_pred = []
+    test_actual = []
     with torch.no_grad():
-        if torch.cuda.is_available():
-            X_new = X_new.to(model.device)
-        y_new_pred = model(X_new)
-    model.train()
+        for batch in test_loader:
+            x, y = batch
+            y_pred = model(x)
+            test_pred.append(y_pred.cpu().numpy())
+            test_actual.append(y.cpu().numpy())
 
-    y_new_pred = model.scaler.inverse_transform(y_new_pred.cpu().numpy())
-    print(y_new_pred)
+    # concatenate all batches
+    test_pred = np.concatenate(test_pred, axis=0)
+    test_actual = np.concatenate(test_actual, axis=0)
 
+    # unscale predictions and actual values
+    test_pred_unscaled = scaler.inverse_transform(test_pred.reshape(-1, 1))
+    test_actual_unscaled = scaler.inverse_transform(test_actual.reshape(-1, 1))
+
+    # print predicted and actual values
+
+    import matplotlib.pyplot as plt
+
+    # plot predicted and actual values
+    test_df = df.tail(len(test_actual_unscaled))
+    plt.plot(test_df.index, test_actual_unscaled, label='actual')
+    plt.plot(test_df.index, test_pred_unscaled, label='predicted')
+    plt.legend()
+    plt.show()
