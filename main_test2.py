@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-
+from pytorch_lightning.loggers import TensorBoardLogger
 import torch.nn.functional as F
 
 
@@ -74,6 +74,9 @@ if __name__ == '__main__':
                 'monitor': 'val_loss'
             }
 
+        def on_fit_start(self):
+            # log hyperparameters to tensorboard
+            self.logger.log_hyperparams(self.hparams)
 
     # load data
     df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
@@ -112,14 +115,14 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(features_test_tensor, labels_test_tensor)
 
     # create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=20, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=20, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=32, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=32, drop_last=True)
 
     # create model
     input_size = features.shape[1]
     hidden_size = 32
-    num_layers = 8
+    num_layers = 12
     output_size = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     learning_rate = 1e-3
@@ -135,12 +138,16 @@ if __name__ == '__main__':
         dirpath='checkpoints/',
         filename='best_model_{epoch}_{val_loss:.4f}',
         save_top_k=1,
-        mode='min'
+        mode='min',
+        save_last=True
     )
-    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=10, mode="min")
-
+    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
+    # create hyperparameters dictionary
+    # initialize logger
+    logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor')
     # train model
     trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
+                         logger=logger,
                          callbacks=[checkpoint_callback, early_stopping_callback])
     trainer.fit(model, train_loader, val_loader)
 
