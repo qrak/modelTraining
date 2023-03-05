@@ -7,6 +7,8 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelCheckpoint
+
 import torch.nn.functional as F
 
 
@@ -130,12 +132,17 @@ if __name__ == '__main__':
                           learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout).to(device)
 
     # create checkpoint callback
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss_epoch', dirpath='checkpoints/',
-                                                       filename='lstm-regressor-{epoch:02d}-{val_loss_epoch:.2f}')
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+        monitor='val_loss',
+        dirpath='checkpoints/',
+        filename='best_model_{epoch}_{val_loss:.4f}',
+        save_top_k=1,
+        mode='min'
+    )
 
     # train model
-    trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
-                         checkpoint_callback=checkpoint_callback)
+    trainer = pl.Trainer(max_epochs=1, accelerator="gpu" if torch.cuda.is_available() else 0,
+                         callbacks=[checkpoint_callback])
     trainer.fit(model, train_loader, val_loader)
 
     # switch to evaluation mode
