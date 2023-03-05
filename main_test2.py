@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
         def configure_optimizers(self):
             optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=2)
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=5)
             return {
                 'optimizer': optimizer,
                 'lr_scheduler': scheduler,
@@ -91,7 +91,7 @@ if __name__ == '__main__':
     labels_scaled = scaler.fit_transform(labels)
 
     # split dataset into train, val and test sets
-    X_train_val, X_test, y_train_val, y_test = train_test_split(features_scaled, labels_scaled, test_size=0.2,
+    X_train_val, X_test, y_train_val, y_test = train_test_split(features_scaled, labels_scaled, test_size=0.1,
                                                                 random_state=42, shuffle=False)
 
     X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.25, random_state=42,
@@ -117,8 +117,8 @@ if __name__ == '__main__':
 
     # create model
     input_size = features.shape[1]
-    hidden_size = 20
-    num_layers = 4
+    hidden_size = 32
+    num_layers = 8
     output_size = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     learning_rate = 1e-3
