@@ -22,8 +22,8 @@ if __name__ == '__main__':
                      dropout=0.0):
             super().__init__()
             self.hidden_size = hidden_size
-            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-            self.dense = nn.Linear(hidden_size, hidden_size)
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
+            self.dense = nn.Linear(hidden_size * 2, hidden_size)  # add a dense layer
             self.fc = nn.Linear(hidden_size, output_size)
             self.learning_rate = learning_rate
             self.weight_decay = weight_decay
@@ -31,12 +31,8 @@ if __name__ == '__main__':
             self.l1 = nn.L1Loss()
 
         def forward(self, x):
-            batch_size = x.shape[0]
             lstm_out, (h_n, c_n) = self.lstm(x)
-            # Reshape the output of the LSTM layer to (batch_size, hidden_size)
-            lstm_out = lstm_out.unsqueeze(dim=1)
-            lstm_out = lstm_out[:, -1, :].view(batch_size, self.lstm.hidden_size)
-            lstm_out = self.dropout(lstm_out)
+            h_n = h_n[-1]  # use last hidden state from final layer
             dense_out = F.relu(self.dense(lstm_out))
             dense_out = self.dropout(dense_out)
             output = self.fc(dense_out)
@@ -46,7 +42,8 @@ if __name__ == '__main__':
             x, y = batch
             y_hat = self(x)
             l1_regularization = self.l1(self.fc.weight, torch.zeros_like(self.fc.weight))
-            loss = nn.MSELoss()(y_hat, y.view(-1, 1)) + self.weight_decay * l1_regularization
+            mse_loss = nn.MSELoss()(y_hat, y.view(-1, 1))
+            loss = mse_loss + self.weight_decay * l1_regularization
             self.log('train_loss', loss, prog_bar=True)
             return {'loss': loss, 'y_hat': y_hat, 'y': y}
 
@@ -114,9 +111,9 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(features_test_tensor, labels_test_tensor)
 
     # create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=20)
-    test_loader = DataLoader(test_dataset, batch_size=20)
+    train_loader = DataLoader(train_dataset, batch_size=20, shuffle=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=20, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=20, drop_last=True)
 
     # create model
     input_size = features.shape[1]
