@@ -129,8 +129,13 @@ if __name__ == '__main__':
     model = LSTMRegressor(input_size, hidden_size, num_layers, output_size,
                           learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout).to(device)
 
+    # create checkpoint callback
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss_epoch', dirpath='checkpoints/',
+                                                       filename='lstm-regressor-{epoch:02d}-{val_loss_epoch:.2f}')
+
     # train model
-    trainer = pl.Trainer(max_epochs=5, accelerator="gpu" if torch.cuda.is_available() else 0)
+    trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
+                         checkpoint_callback=checkpoint_callback)
     trainer.fit(model, train_loader, val_loader)
 
     # switch to evaluation mode
