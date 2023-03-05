@@ -121,7 +121,7 @@ if __name__ == '__main__':
     # create model
     input_size = features.shape[1]
     hidden_size = 20
-    num_layers = 2
+    num_layers = 4
     output_size = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     learning_rate = 1e-3
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     )
 
     # train model
-    trainer = pl.Trainer(max_epochs=1, accelerator="gpu" if torch.cuda.is_available() else 0,
+    trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
                          callbacks=[checkpoint_callback])
     trainer.fit(model, train_loader, val_loader)
 
@@ -173,6 +173,7 @@ if __name__ == '__main__':
 
     # plot predicted and actual values
     test_df = df.tail(len(test_actual_unscaled))
+
     plt.plot(test_df.index, test_actual_unscaled, label='actual')
     plt.plot(test_df.index, test_pred_unscaled, label='predicted')
     plt.legend()
