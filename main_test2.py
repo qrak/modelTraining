@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     # create model
     input_size = features.shape[1]
-    hidden_size = 16
+    hidden_size = 32
     num_layers = 8
     output_size = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
