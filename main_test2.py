@@ -1,82 +1,19 @@
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
+from classdirectory.classfile_test import LSTMRegressor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
-import torch.nn.functional as F
+
 
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
-
-    class LSTMRegressor(pl.LightningModule):
-        def __init__(self, input_size, hidden_size, num_layers, output_size, learning_rate=1e-3, weight_decay=0.0,
-                     dropout=0.0):
-            super().__init__()
-            self.hidden_size = hidden_size
-            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
-            self.dense = nn.Linear(hidden_size * 2, hidden_size)  # add a dense layer
-            self.fc = nn.Linear(hidden_size, output_size)
-            self.learning_rate = learning_rate
-            self.weight_decay = weight_decay
-            self.dropout = nn.Dropout(dropout)
-            self.l1 = nn.L1Loss()
-
-        def forward(self, x):
-            lstm_out, (h_n, c_n) = self.lstm(x)
-            h_n = h_n[-1]  # use last hidden state from final layer
-            dense_out = F.relu(self.dense(lstm_out))
-            dense_out = self.dropout(dense_out)
-            output = self.fc(dense_out)
-            return output
-
-        def training_step(self, batch, batch_idx):
-            x, y = batch
-            y_hat = self(x)
-            l1_regularization = self.l1(self.fc.weight, torch.zeros_like(self.fc.weight))
-            mse_loss = nn.MSELoss()(y_hat, y.view(-1, 1))
-            loss = mse_loss + self.weight_decay * l1_regularization
-            self.log('train_loss', loss, prog_bar=True)
-            return {'loss': loss, 'y_hat': y_hat, 'y': y}
-
-        def validation_step(self, batch, batch_idx):
-            x, y = batch
-            y_hat = self(x)
-            mse_loss = nn.MSELoss()(y_hat, y.view(-1, 1))
-            l1_regularization = self.weight_decay * torch.norm(self.fc.weight, p=1)
-            loss = mse_loss + l1_regularization
-            self.log('val_loss', loss, prog_bar=True)
-            return {'loss': loss, 'y_hat': y_hat, 'y': y}
-
-        def training_epoch_end(self, outputs):
-            avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-            self.log('train_loss_epoch', avg_loss, prog_bar=True)
-
-        def validation_epoch_end(self, outputs):
-            avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-            self.log('val_loss_epoch', avg_loss, prog_bar=True)
-
-        def configure_optimizers(self):
-            optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=5)
-            return {
-                'optimizer': optimizer,
-                'lr_scheduler': scheduler,
-                'monitor': 'val_loss'
-            }
-
-        def on_fit_start(self):
-            # log hyperparameters to tensorboard
-            self.logger.log_hyperparams(self.hparams)
 
     # load data
     df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
@@ -121,8 +58,8 @@ if __name__ == '__main__':
 
     # create model
     input_size = features.shape[1]
-    hidden_size = 32
-    num_layers = 12
+    hidden_size = 16
+    num_layers = 8
     output_size = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     learning_rate = 1e-3
@@ -144,10 +81,20 @@ if __name__ == '__main__':
     early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
     # create hyperparameters dictionary
     # initialize logger
-    logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor')
+    logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor', default_hp_metric=True)
+    # log hyperparameters to TensorBoard
+    logger.log_hyperparams({
+        "input_size": input_size,
+        "hidden_size": hidden_size,
+        "num_layers": num_layers,
+        "output_size": output_size,
+        "learning_rate": learning_rate,
+        "weight_decay": weight_decay,
+        "dropout": dropout
+    })
     # train model
     trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
-                         logger=logger,
+                         logger=logger, log_every_n_steps=1,
                          callbacks=[checkpoint_callback, early_stopping_callback])
     trainer.fit(model, train_loader, val_loader)
 
