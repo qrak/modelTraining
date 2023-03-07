@@ -69,27 +69,13 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(X_test, y_test)
 
     # create DataLoader objects for train, validation, and test sets
-    batch_size = 32
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
+    batch_size = 64
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, drop_last=True)
-    # split dataset into train, val and test sets
-    X_train_val, X_test, y_train_val, y_test = train_test_split(features_scaled, labels_scaled, test_size=0.1,
-                                                                random_state=42, shuffle=False)
-
-    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, random_state=42,
-                                                      shuffle=False)
-
-
-    train_dataset = TensorDataset(torch.tensor(X_train, dtype=torch.float32).to(device),
-                                  torch.tensor(y_train, dtype=torch.float32).to(device))
-    val_dataset = TensorDataset(torch.tensor(X_val, dtype=torch.float32).to(device),
-                                torch.tensor(y_val, dtype=torch.float32).to(device))
-    test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32).to(device),
-                                 torch.tensor(y_test, dtype=torch.float32).to(device))
 
     input_size = features.shape[1]
-    hidden_size = 64
+    hidden_size = 128
     num_layers = 2
     output_size = 1
 
@@ -103,9 +89,9 @@ if __name__ == '__main__':
 
 
     optimizer_config = model.configure_optimizers()
-    #optimizer = optimizer_config['optimizer']
-    #lr_scheduler = optimizer_config['lr_scheduler']
-    #weight_decay_scheduler = optimizer_config['weight_decay_scheduler']
+    optimizer = optimizer_config['optimizer']
+    lr_scheduler = optimizer_config['lr_scheduler']
+    weight_decay_scheduler = optimizer_config['weight_decay_scheduler']
     # create checkpoint callback
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',
@@ -115,7 +101,7 @@ if __name__ == '__main__':
         mode='min',
         save_last=True
     )
-    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
+    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=30, mode="min")
     # create hyperparameters dictionary
     # initialize logger
     logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor', default_hp_metric=True)
@@ -133,6 +119,7 @@ if __name__ == '__main__':
     trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
                          logger=logger, log_every_n_steps=1,
                          callbacks=[checkpoint_callback, early_stopping_callback], auto_lr_find=True, auto_scale_batch_size=True)
+    model.to(device)
     trainer.fit(model, train_loader, val_loader)
 
     # Generate file name with current time
@@ -151,6 +138,7 @@ if __name__ == '__main__':
     with torch.no_grad():
         for batch in test_loader:
             x, y = batch
+            x = x.to(device)
             y_pred = model(x)
             test_pred.append(y_pred.cpu().numpy())
             test_actual.append(y.cpu().numpy())
