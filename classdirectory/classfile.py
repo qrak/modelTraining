@@ -3,13 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import pytorch_lightning as pl
+import os
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 from torch.utils.tensorboard import SummaryWriter
 
 class LSTMRegressor(pl.LightningModule):
     def __init__(self, input_size, hidden_size, num_layers, output_size, learning_rate=1e-3, weight_decay=0.0,
-                 dropout=0.0, max_norm=1.0):
+                 dropout=0.0, max_norm=0.5):
         super().__init__()
         self.hidden_size = hidden_size
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
@@ -17,9 +18,11 @@ class LSTMRegressor(pl.LightningModule):
         self.fc = nn.Linear(hidden_size, output_size)
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.current_weight_decay = weight_decay
         self.dropout = nn.Dropout(dropout)
         self.l1 = nn.L1Loss()
         self.max_norm = max_norm
+
 
     def forward(self, x):
         lstm_out, (h_n, c_n) = self.lstm(x)
@@ -38,11 +41,13 @@ class LSTMRegressor(pl.LightningModule):
 
         # apply gradient normalization
         torch.nn.utils.clip_grad_norm_(self.parameters(), self.max_norm)
-
+        # Get the current learning rate and log it
+        lr = self.trainer.optimizers[0].param_groups[0]['lr']
         self.log('train_loss', loss, prog_bar=True, on_epoch=True)
-        self.log('train_weight_decay', self.weight_decay, prog_bar=True, on_epoch=True)
-        self.log('train_learning_rate', self.learning_rate, prog_bar=True, on_epoch=True)
-        self.log('max_norm', self._get_norm(), prog_bar=True)  # log gradient norm
+        self.log('learning_rate', lr, prog_bar=True, on_epoch=True)
+        self.current_weight_decay = self.trainer.optimizers[0].param_groups[0]['weight_decay']
+        self.log('weight_decay', self.current_weight_decay, prog_bar=True, on_epoch=True)
+        self.log('max_norm', self._get_norm(), prog_bar=True, on_epoch=True)  # log gradient norm
         return {'loss': loss, 'y_hat': y_hat, 'y': y}
 
     def _get_norm(self):
@@ -60,33 +65,36 @@ class LSTMRegressor(pl.LightningModule):
         l1_regularization = self.weight_decay * torch.norm(self.fc.weight, p=1)
         loss = mse_loss + l1_regularization
         self.log('val_loss', loss, prog_bar=True, on_epoch=True)
-        self.log('val_weight_decay', self.weight_decay, prog_bar=True, on_epoch=True)
-        self.log('val_learning_rate', self.learning_rate, prog_bar=True, on_epoch=True)
         return {'loss': loss, 'y_hat': y_hat, 'y': y}
 
     def training_epoch_end(self, outputs):
         avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
-        # log information to TensorBoard
-        writer = SummaryWriter(self.logger.log_dir)
-        writer.add_text('lstm', str(self.lstm))
-        writer.add_text('dense', str(self.dense))
-        writer.add_text('fc', str(self.fc))
-        writer.close()
         self.log('train_loss_epoch', avg_loss, prog_bar=True)
 
     def validation_epoch_end(self, outputs):
         avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
         self.log('val_loss_epoch', avg_loss, prog_bar=True)
+        return {'val_loss': avg_loss}
+
+    def test_epoch_end(self, outputs):
+        avg_loss = torch.stack([x['loss'] for x in outputs]).mean()
+        self.log('test_loss_epoch', avg_loss, prog_bar=True)
+        return {'test_loss': avg_loss}
+
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=10)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+        weight_decay_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1 / (1 + epoch))
         return {
             'optimizer': optimizer,
             'lr_scheduler': scheduler,
-            'monitor': 'val_loss'
+            'weight_decay_scheduler': weight_decay_scheduler,
+            'monitor': 'val_loss'  # Optional: specify the metric to monitor
         }
+
 
     def on_fit_start(self):
         # log hyperparameters to tensorboard
         self.logger.log_hyperparams(self.hparams)
+
