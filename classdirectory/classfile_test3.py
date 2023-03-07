@@ -117,7 +117,7 @@ class LSTMRegressor(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        optimizer = optim.SGD(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
 
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
         weight_decay_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1 / (1 + epoch))

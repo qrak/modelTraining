@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
     input_size = features.shape[1]
     hidden_size = 128
-    num_layers = 2
+    num_layers = 4
     output_size = 1
 
     learning_rate = 1e-3
