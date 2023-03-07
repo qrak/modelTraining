@@ -17,17 +17,20 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # load data
+    # load data from CSV file
     df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
+
     # Convert the date column to a datetime object
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df = df.sort_values('timestamp', ascending=True)
     df.set_index('timestamp', inplace=True)
+
     # Create new columns for day of week, day of month, and day of year
     df['day_of_week'] = df.index.dayofweek
     df['day_of_month'] = df.index.day
     df['day_of_year'] = df.index.dayofyear
 
+    # separate features and labels
     features = df.drop(columns=['close']).values
     labels = df['close'].values.reshape(-1, 1)
 
@@ -35,16 +38,47 @@ if __name__ == '__main__':
     scaler = MinMaxScaler()
     features_scaled = scaler.fit_transform(features)
     labels_scaled = scaler.fit_transform(labels)
-    # set sequence length and create sequences
 
-    print(features_scaled.shape)
-    print(labels_scaled.shape)
-    # split dataset into train, val and test sets
-    X_train_val, X_test, y_train_val, y_test = train_test_split(features_scaled, labels_scaled, test_size=0.1,
-                                                                random_state=42, shuffle=True)
+    # set sequence length
+    sequence_length = 24  # use 24 hours of data to predict next hour's close price
+
+    # create input/output sequences with sliding window method
+    inputs = []
+    outputs = []
+    for i in range(len(features_scaled) - sequence_length):
+        inputs.append(features_scaled[i:i + sequence_length])
+        outputs.append(labels_scaled[i + sequence_length])
+
+    inputs_array = np.array(inputs, dtype=np.float32)
+    outputs_array = np.array(outputs, dtype=np.float32)
+
+    # convert input/output sequences to PyTorch tensors
+    inputs_tensor = torch.tensor(inputs_array, dtype=torch.float32)
+    outputs_tensor = torch.tensor(outputs_array, dtype=torch.float32)
+
+    # split data into train, validation, and test sets
+    X_train_val, X_test, y_train_val, y_test = train_test_split(inputs_tensor, outputs_tensor, test_size=0.1,
+                                                                random_state=42, shuffle=False)
 
     X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, random_state=42,
-                                                      shuffle=True)
+                                                      shuffle=False)
+
+    # create TensorDataset objects for train, validation, and test sets
+    train_dataset = TensorDataset(X_train, y_train)
+    val_dataset = TensorDataset(X_val, y_val)
+    test_dataset = TensorDataset(X_test, y_test)
+
+    # create DataLoader objects for train, validation, and test sets
+    batch_size = 32
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, drop_last=True)
+    # split dataset into train, val and test sets
+    X_train_val, X_test, y_train_val, y_test = train_test_split(features_scaled, labels_scaled, test_size=0.1,
+                                                                random_state=42, shuffle=False)
+
+    X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, random_state=42,
+                                                      shuffle=False)
 
 
     train_dataset = TensorDataset(torch.tensor(X_train, dtype=torch.float32).to(device),
@@ -54,15 +88,9 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(torch.tensor(X_test, dtype=torch.float32).to(device),
                                  torch.tensor(y_test, dtype=torch.float32).to(device))
 
-
-    # create dataloaders
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=32, drop_last=True)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     input_size = features.shape[1]
-    hidden_size = 32
-    num_layers = 4
+    hidden_size = 64
+    num_layers = 2
     output_size = 1
 
     learning_rate = 1e-3
@@ -71,11 +99,13 @@ if __name__ == '__main__':
 
     model = LSTMRegressor(input_size, hidden_size, num_layers, output_size,
                           learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout).to(device)
-    # get the optimizer and the learning rate scheduler
+
+
+
     optimizer_config = model.configure_optimizers()
-    optimizer = optimizer_config['optimizer']
-    lr_scheduler = optimizer_config['lr_scheduler']
-    weight_decay_scheduler = optimizer_config['weight_decay_scheduler']
+    #optimizer = optimizer_config['optimizer']
+    #lr_scheduler = optimizer_config['lr_scheduler']
+    #weight_decay_scheduler = optimizer_config['weight_decay_scheduler']
     # create checkpoint callback
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',

@@ -5,7 +5,7 @@ import pandas as pd
 import pandas_ta
 import ccxt
 from sklearn.preprocessing import MinMaxScaler
-from classdirectory.classfile import LSTMRegressor
+from classdirectory.classfile_test3 import LSTMRegressor
 
 # create exchange object
 exchange = ccxt.binance()
@@ -22,7 +22,13 @@ if __name__ == '__main__':
     # convert data to dataframe
     df = pd.DataFrame(ohlcv[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df = df.sort_values('timestamp', ascending=True)
     df.set_index('timestamp', inplace=True)
+    # Create new columns for day of week, day of month, and day of year
+    df['day_of_week'] = df.index.dayofweek
+    df['day_of_month'] = df.index.day
+    df['day_of_year'] = df.index.dayofyear
+
     # Calculate technical indicators and add to dataframe
     df.ta.ema(length=20, append=True)
     df.ta.ema(length=50, append=True)
@@ -53,11 +59,11 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(features_test_tensor, labels_test_tensor)
 
 
-    test_loader = DataLoader(test_dataset, batch_size=16, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=64, drop_last=True)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # create model
     input_size = features.shape[1]
-    hidden_size = 32
+    hidden_size = 128
     num_layers = 4
     output_size = 1
     
@@ -65,7 +71,7 @@ if __name__ == '__main__':
     weight_decay = 1e-4
     dropout = 0.2
     # load saved model state dictionary
-    model_state_dict = torch.load("save/best_model_32_64_3_0.2.pt", map_location=device)
+    model_state_dict = torch.load("save/test_model_32_128_4_0.2_20230307-183021-350177.pt", map_location=device)
 
     # determine the hyperparameters of the saved model by inspecting its state dictionary
 
