@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from classdirectory.classfile_test3 import LSTMRegressor
+from classdirectory.classfile import LSTMRegressor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     labels_scaled = scaler.fit_transform(labels)
 
     # set sequence length
-    sequence_length = 8
+    sequence_length = 24
 
     # create input/output sequences with sliding window method
     inputs = []

@@ -25,7 +25,6 @@ class LSTMRegressor(pl.LightningModule):
 
 
     def forward(self, x):
-        print(x.shape)
         lstm_out, (h_n, c_n) = self.lstm(x)
         h_n = h_n[-1]  # use last hidden state from final layer
         dense_out = F.relu(self.dense(lstm_out))

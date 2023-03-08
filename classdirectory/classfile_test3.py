@@ -37,7 +37,7 @@ class LSTMRegressor(pl.LightningModule):
         self.output_size = output_size
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.max_norm = max_norm
+        self.gradient_norm = max_norm
         self.weight_decay_scheduler = WeightDecayScheduler(weight_decay)
         self.conv_layers = nn.Sequential(
             nn.Conv1d(in_channels=input_size, out_channels=hidden_size * 2, kernel_size=3, stride=1, padding=1),
@@ -101,7 +101,7 @@ class LSTMRegressor(pl.LightningModule):
         loss = mse_loss + l1_regularization + l2_regularization
 
         # apply gradient normalization
-        torch.nn.utils.clip_grad_norm_(self.parameters(), self.max_norm)
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_norm)
 
         # Get the current learning rate and log it
         lr = self.trainer.optimizers[0].param_groups[0]['lr']
