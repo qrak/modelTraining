@@ -75,8 +75,8 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=batch_size, drop_last=True)
 
     input_size = features.shape[1]
-    hidden_size = 128
-    num_layers = 4
+    hidden_size = 96
+    num_layers = 3
     output_size = 1
 
     learning_rate = 1e-3
@@ -91,7 +91,6 @@ if __name__ == '__main__':
     optimizer_config = model.configure_optimizers()
     optimizer = optimizer_config['optimizer']
     lr_scheduler = optimizer_config['lr_scheduler']
-    weight_decay_scheduler = optimizer_config['weight_decay_scheduler']
     # create checkpoint callback
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',
@@ -124,7 +123,7 @@ if __name__ == '__main__':
 
     # Generate file name with current time
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    file_name = f"test_model_{input_size}_{hidden_size}_{num_layers}_{dropout}_{time_stamp}.pt"
+    file_name = f"best_model_{input_size}_{hidden_size}_{num_layers}_{dropout}_{time_stamp}.pt"
     file_path = os.path.join("save", file_name)
 
     # Save model to file
