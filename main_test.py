@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from classdirectory.classfile import LSTMRegressor
+from classdirectory.classfile_test4 import LSTMRegressor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
 
     # load data from CSV file
-    df = pd.read_csv("BTC_USDT_15m_with_indicators.csv")
+    df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
 
     # Convert the date column to a datetime object
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -58,10 +58,10 @@ if __name__ == '__main__':
 
     # split data into train, validation, and test sets
     X_train_val, X_test, y_train_val, y_test = train_test_split(inputs_tensor, outputs_tensor, test_size=0.1,
-                                                                random_state=42, shuffle=False)
+                                                                random_state=42, shuffle=True)
 
     X_train, X_val, y_train, y_val = train_test_split(X_train_val, y_train_val, test_size=0.2, random_state=42,
-                                                      shuffle=False)
+                                                      shuffle=True)
 
     # create TensorDataset objects for train, validation, and test sets
     train_dataset = TensorDataset(X_train, y_train)
@@ -69,22 +69,22 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(X_test, y_test)
 
     # create DataLoader objects for train, validation, and test sets
-    batch_size = 64
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
+    batch_size = 32
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
+    num_epochs = 200
     input_size = features.shape[1]
-    hidden_size = 64
+    hidden_size = 32
     num_layers = 2
     output_size = 1
-
     learning_rate = 0.0001
     weight_decay = 1e-3
     dropout = 0.2
 
-    model = LSTMRegressor(input_size, hidden_size, num_layers, output_size,
-                          learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout).to(device)
+    model = LSTMRegressor(input_size, hidden_size, num_layers, output_size, learning_rate, dropout=dropout,
+                          weight_decay=weight_decay).to(device)
 
 
 
@@ -115,9 +115,12 @@ if __name__ == '__main__':
         "dropout": dropout
     })
     # train model
-    trainer = pl.Trainer(max_epochs=200, accelerator="gpu" if torch.cuda.is_available() else 0,
+    trainer = pl.Trainer(max_epochs=num_epochs,
+                         accelerator="gpu" if torch.cuda.is_available() else 0,
                          logger=logger, log_every_n_steps=1,
-                         callbacks=[checkpoint_callback, early_stopping_callback], auto_lr_find=True, auto_scale_batch_size=True)
+                         callbacks=[checkpoint_callback, early_stopping_callback],
+                         auto_lr_find=True,
+                         auto_scale_batch_size=True)
     model.to(device)
     trainer.fit(model, train_loader, val_loader)
 

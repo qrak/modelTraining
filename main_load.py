@@ -5,7 +5,7 @@ import pandas as pd
 import pandas_ta
 import ccxt
 from sklearn.preprocessing import MinMaxScaler
-from classdirectory.classfile_test3 import LSTMRegressor
+from classdirectory.classfile_test4 import LSTMRegressor
 
 # create exchange object
 exchange = ccxt.binance()
@@ -30,15 +30,9 @@ if __name__ == '__main__':
     df['day_of_year'] = df.index.dayofyear
 
     # Calculate technical indicators and add to dataframe
-    df.ta.ema(length=20, append=True)
-    df.ta.ema(length=50, append=True)
-    df.ta.ema(length=100, append=True)
-    df.ta.rsi(length=9, append=True)
-    df.ta.rsi(length=21, append=True)
-    df.ta.rsi(length=30, append=True)
-    df.ta.bbands(length=9, append=True)
-    df.ta.bbands(length=21, append=True)
-    df.ta.bbands(length=30, append=True)
+    df.ta.ema(length=14, append=True)
+    df.ta.rsi(length=14, append=True)
+    df.ta.bbands(length=14, append=True)
     df.ta.cci(length=14, append=True)
     df.ta.adx(length=14, append=True)
     sliced_rows = 101
@@ -50,10 +44,22 @@ if __name__ == '__main__':
     features_scaled = scaler.fit_transform(features)
     labels_scaled = scaler.fit_transform(labels)
 
+    # set sequence length
+    sequence_length = 24
+
+    # create input/output sequences with sliding window method
+    inputs = []
+    outputs = []
+    for i in range(len(features_scaled) - sequence_length):
+        inputs.append(features_scaled[i:i + sequence_length])
+        outputs.append(labels_scaled[i + sequence_length])
+
+    inputs_array = np.array(inputs, dtype=np.float32)
+    outputs_array = np.array(outputs, dtype=np.float32)
 
     # convert to tensors
-    features_test_tensor = torch.tensor(features_scaled, dtype=torch.float32).to(device)
-    labels_test_tensor = torch.tensor(labels_scaled, dtype=torch.float32).to(device)
+    features_test_tensor = torch.tensor(inputs_array, dtype=torch.float32).to(device)
+    labels_test_tensor = torch.tensor(outputs_array, dtype=torch.float32).to(device)
 
 
     test_dataset = TensorDataset(features_test_tensor, labels_test_tensor)
@@ -63,20 +69,19 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # create model
     input_size = features.shape[1]
-    hidden_size = 128
-    num_layers = 4
+    hidden_size = 32
+    num_layers = 2
     output_size = 1
-    
-    learning_rate = 1e-3
-    weight_decay = 1e-4
+    learning_rate = 0.0001
+    weight_decay = 1e-3
     dropout = 0.2
     # load saved model state dictionary
-    model_state_dict = torch.load("save/test_model_32_128_4_0.2_20230307-183021-350177.pt", map_location=device)
+    model_state_dict = torch.load("save/best_model_18_32_2_0.2_20230308-233345-227752.pt", map_location=device)
 
     # determine the hyperparameters of the saved model by inspecting its state dictionary
 
-    model = LSTMRegressor(input_size, hidden_size, num_layers, output_size,
-                          learning_rate=learning_rate, weight_decay=weight_decay, dropout=dropout).to(device)
+    model = LSTMRegressor(input_size, hidden_size, num_layers, output_size, learning_rate, dropout=dropout,
+                          weight_decay=weight_decay).to(device)
     model.load_state_dict(model_state_dict)
 
 

@@ -3,19 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import pytorch_lightning as pl
-import os
+import torch.nn.init as init
 
 
 from torch.utils.tensorboard import SummaryWriter
 
 """
 COMMENTED FOR INFORMATION WHAT I FEED TO THE MODEL
-batch_size = 64
+batch_size = 32
 input_size = 32
 hidden_size = 96
-num_layers = 3
+num_layers = 4
 output_size = 1
-output_size = 1
+
 
 learning_rate = 1e-3
 weight_decay = 1e-4
@@ -26,128 +26,84 @@ dropout = 0.2
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-import torch.nn.functional as F
-
-class LSTMRegressor(pl.LightningModule):
-    def __init__(self, input_size, hidden_size, num_layers, output_size, learning_rate=1e-3, weight_decay=0.0,
-                 dropout=0.0, max_norm=0.5):
+class SelfAttention(nn.Module):
+    def __init__(self, hidden_size):
         super().__init__()
         self.hidden_size = hidden_size
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=True)
-        self.layer_norm = nn.LayerNorm(hidden_size*2) # add layer normalization layer
-        self.dense = nn.Linear(hidden_size * 2, hidden_size)
-        self.fc = nn.Linear(hidden_size, output_size)
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.current_weight_decay = weight_decay
-        self.dropout = nn.Dropout(dropout)
-        self.l1 = nn.L1Loss()
-        self.max_norm = max_norm
-
-        # add self-attention mechanism
-        self.attention = nn.MultiheadAttention(embed_dim=hidden_size*2, num_heads=8, dropout=dropout)
+        self.query = nn.Linear(hidden_size, hidden_size)
+        self.key = nn.Linear(hidden_size, hidden_size)
+        self.value = nn.Linear(hidden_size, hidden_size)
+        self.scale = torch.sqrt(torch.FloatTensor([hidden_size])).to(device)
 
     def forward(self, x):
-        lstm_out, (h_n, c_n) = self.lstm(x)
-        h_n = h_n[-1]
-        dense_out = F.relu(self.dense(lstm_out))
-        dense_out = dense_out.view(-1, dense_out.size(2),
-                                   dense_out.size(1))  # reshape to (batch_size, hidden_size*2, sequence_length)
-        dense_out = self.layer_norm(dense_out)
-        dense_out = dense_out.view(-1, dense_out.size(2),
-                                   dense_out.size(1))  # reshape back to (batch_size, sequence_length, hidden_size*2)
-        dense_out = self.dropout(dense_out)
+        batch_size, seq_len, hidden_size = x.shape
+        queries = self.query(x)
+        keys = self.key(x)
+        values = self.value(x)
+        energy = torch.bmm(queries, keys.transpose(1, 2)) / self.scale
+        attention = F.softmax(energy, dim=2)
+        weighted = torch.bmm(attention, values)
+        return weighted
 
-        # apply self-attention mechanism
-        lstm_out = lstm_out.transpose(0, 1)
-        lstm_out, _ = self.attention(lstm_out, lstm_out, lstm_out)
-        lstm_out = lstm_out.transpose(0, 1)
 
-        output = self.fc(lstm_out)
+class LSTMRegressor(pl.LightningModule):
+    def __init__(self, input_size, hidden_size, num_layers, output_size, learning_rate, dropout, weight_decay):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.output_size = output_size
+        self.dropout = dropout
+        self.weight_decay = weight_decay
+        self.learning_rate = learning_rate
+        self.regularization_strength_l1 = 0.001
+        self.regularization_strength_l2 = 0.001
+        self.lstm1 = nn.LSTM(input_size, hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout,
+                             bidirectional=True)
+        self.fc1 = nn.Linear(hidden_size*2, hidden_size*2) # added linear layer after LSTM
+        init.xavier_uniform_(self.fc1.weight)
+        self.attention = SelfAttention(hidden_size * 2)
+        self.norm1 = nn.LayerNorm(hidden_size * 2)
+        self.fc2 = nn.Linear(hidden_size * 2, output_size) # added linear layer after self-attention
+        init.xavier_uniform_(self.fc2.weight)
+
+
+    def forward(self, x):
+        lstm1_out, _ = self.lstm1(x)
+        fc_out = self.fc1(lstm1_out) # apply linear layer after LSTM
+        attention_out = self.attention(fc_out) # apply self-attention on output of linear layer
+        norm_out = self.norm1(attention_out)
+        output = self.fc2(norm_out[:, -1, :])
         return output
+
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-
-        # Add L1 and L2 regularization terms
-        l1_regularization = self.weight_decay * (
-                    torch.norm(self.fc1.weight, p=1) + torch.norm(self.fc2.weight, p=1))
-        l2_regularization = self.weight_decay * (
-                    torch.norm(self.fc1.weight, p=2) + torch.norm(self.fc2.weight, p=2))
-
         mse_loss = F.mse_loss(y_hat, y)
-        loss = mse_loss + l1_regularization + l2_regularization
-
-        # apply gradient normalization
-        torch.nn.utils.clip_grad_norm_(self.parameters(), self.max_norm)
-
-        # Get the current learning rate and log it
-        lr = self.trainer.optimizers[0].param_groups[0]['lr']
-        self.log('train_loss', loss, prog_bar=True, on_epoch=True)
-        self.log('learning_rate', lr, prog_bar=True, on_epoch=True)
-        gradient_norm = self._get_norm()
-        self.log('max_norm', gradient_norm, prog_bar=True, on_epoch=True)
-
-        return {'loss': loss, 'y_hat': y_hat, 'y': y}
-
-    def training_epoch_end(self, outputs):
-        loss = torch.stack([x['loss'] for x in outputs]).mean()
-        weight_decay = self.weight_decay_scheduler(self.current_epoch, loss)
-        self.log('weight_decay', weight_decay, prog_bar=True, on_epoch=True)
+        l1_loss = sum(p.abs().sum() for p in self.parameters()) * self.regularization_strength_l1
+        l2_loss = sum(p.pow(2).sum() for p in self.parameters()) * self.regularization_strength_l2
+        loss = mse_loss + l1_loss + l2_loss
+        self.log('train_loss', loss)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        l1_regularization = self.weight_decay * (
-                torch.norm(self.fc1.weight, p=1) + torch.norm(self.fc2.weight, p=1))
-        l2_regularization = self.weight_decay * (
-                torch.norm(self.fc1.weight, p=2) + torch.norm(self.fc2.weight, p=2))
-
         mse_loss = F.mse_loss(y_hat, y)
-        loss = mse_loss + l1_regularization + l2_regularization
-        self.log('val_loss', loss, prog_bar=True, on_epoch=True)
-        return {'loss': loss, 'y_hat': y_hat, 'y': y}
+        l1_loss = sum(p.abs().sum() for p in self.parameters()) * self.regularization_strength_l1
+        l2_loss = sum(p.pow(2).sum() for p in self.parameters()) * self.regularization_strength_l2
+        loss = mse_loss + l1_loss + l2_loss
+        self.log('val_loss', loss, prog_bar=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5,
-                                                         verbose=True, eps=1e-8)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True,
+                                                         eps=1e-8)
+
         return {
             'optimizer': optimizer,
             'lr_scheduler': scheduler,
             'monitor': 'val_loss'  # Optional: specify the metric to monitor
         }
-
-    def on_fit_start(self):
-        # log hyperparameters to tensorboard
-        self.logger.log_hyperparams(self.hparams)
-
-    def _get_norm(self):
-        total_norm = 0
-        for p in self.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.data.norm(2)
-                total_norm += param_norm.item() ** 2
-        return total_norm ** 0.5
-
-class WeightDecayScheduler:
-    def __init__(self, weight_decay, factor=0.5, patience=5):
-        self.weight_decay = weight_decay
-        self.factor = factor
-        self.patience = patience
-        self.num_bad_epochs = 0
-        self.best_loss = float('inf')
-
-    def __call__(self, epoch, loss):
-        if loss < self.best_loss:
-            self.best_loss = loss
-            self.num_bad_epochs = 0
-        else:
-            self.num_bad_epochs += 1
-            if self.num_bad_epochs >= self.patience:
-                self.weight_decay *= self.factor
-                self.num_bad_epochs = 0
-                print(f'Reducing weight decay to {self.weight_decay:.8f}')
-
-        return self.weight_decay
