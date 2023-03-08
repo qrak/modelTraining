@@ -38,7 +38,7 @@ class LSTMRegressor(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.max_norm = max_norm
-
+        self.weight_decay_scheduler = WeightDecayScheduler(weight_decay)
         self.conv_layers = nn.Sequential(
             nn.Conv1d(in_channels=input_size, out_channels=hidden_size * 2, kernel_size=3, stride=1, padding=1),
             nn.Conv1d(in_channels=hidden_size * 2, out_channels=hidden_size * 2, kernel_size=3, stride=1, padding=1)
@@ -107,15 +107,15 @@ class LSTMRegressor(pl.LightningModule):
         lr = self.trainer.optimizers[0].param_groups[0]['lr']
         self.log('train_loss', loss, prog_bar=True, on_epoch=True)
         self.log('learning_rate', lr, prog_bar=True, on_epoch=True)
-
-
-        self.log('weight_decay', self.weight_decay, prog_bar=True, on_epoch=True)
         gradient_norm = self._get_norm()
         self.log('max_norm', gradient_norm, prog_bar=True, on_epoch=True)
 
         return {'loss': loss, 'y_hat': y_hat, 'y': y}
 
-
+    def training_epoch_end(self, outputs):
+        loss = torch.stack([x['loss'] for x in outputs]).mean()
+        weight_decay = self.weight_decay_scheduler(self.current_epoch, loss)
+        self.log('weight_decay', weight_decay, prog_bar=True, on_epoch=True)
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -130,7 +130,6 @@ class LSTMRegressor(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
-
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True, eps=1e-8)
         return {
             'optimizer': optimizer,
@@ -150,3 +149,24 @@ class LSTMRegressor(pl.LightningModule):
                 param_norm = p.grad.data.norm(2)
                 total_norm += param_norm.item() ** 2
         return total_norm ** 0.5
+
+class WeightDecayScheduler:
+    def __init__(self, weight_decay, factor=0.5, patience=5):
+        self.weight_decay = weight_decay
+        self.factor = factor
+        self.patience = patience
+        self.num_bad_epochs = 0
+        self.best_loss = float('inf')
+
+    def __call__(self, epoch, loss):
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.num_bad_epochs = 0
+        else:
+            self.num_bad_epochs += 1
+            if self.num_bad_epochs >= self.patience:
+                self.weight_decay *= self.factor
+                self.num_bad_epochs = 0
+                print(f'Reducing weight decay to {self.weight_decay:.8f}')
+
+        return self.weight_decay

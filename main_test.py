@@ -79,8 +79,8 @@ if __name__ == '__main__':
     num_layers = 3
     output_size = 1
 
-    learning_rate = 1e-3
-    weight_decay = 1e-4
+    learning_rate = 0.0001
+    weight_decay = 1e-3
     dropout = 0.2
 
     model = LSTMRegressor(input_size, hidden_size, num_layers, output_size,
