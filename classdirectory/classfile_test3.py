@@ -51,7 +51,7 @@ class LSTMRegressor(pl.LightningModule):
                             batch_first=True, bidirectional=True)
         self.lstm2 = nn.LSTM(input_size=hidden_size * 2, hidden_size=hidden_size, num_layers=num_layers,
                             batch_first=True, bidirectional=True)
-        self.layer_norm = nn.LayerNorm([hidden_size * 2, sequence_length])
+        self.layer_norm = nn.LayerNorm([hidden_size * 2, sequence_length // 3])
         self.fc1 = nn.Linear(hidden_size * 2, hidden_size)
         self.fc2 = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(dropout)

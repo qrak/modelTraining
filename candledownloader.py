@@ -5,7 +5,7 @@ import os
 
 
 class CandleDownloader:
-    def __init__(self, exchange_name='binance', pair_name='BTC/USDT', timeframe='1h', start_time='2010-10-04', end_time=None, batch_size=1000, output_file=None):
+    def __init__(self, exchange_name='binance', pair_name='BTC/USDT', timeframe='15m', start_time='2015-01-01T00:00:00Z', end_time=None, batch_size=1000, output_file=None):
         self.exchange = getattr(ccxt, exchange_name)()
         self.pair_name = pair_name
         self.timeframe = timeframe

@@ -18,7 +18,7 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
 
     # load data from CSV file
-    df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
+    df = pd.read_csv("csv//BTC_USDT_15m_2015-01-01_now_binance.csv")
 
     # Convert the date column to a datetime object
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     labels_scaled = scaler.fit_transform(labels)
 
     # set sequence length
-    sequence_length = 24  # use 24 hours of data to predict next hour's close price
+    sequence_length = 8
 
     # create input/output sequences with sliding window method
     inputs = []
@@ -75,8 +75,8 @@ if __name__ == '__main__':
     test_loader = DataLoader(test_dataset, batch_size=batch_size, drop_last=True)
 
     input_size = features.shape[1]
-    hidden_size = 96
-    num_layers = 3
+    hidden_size = 256
+    num_layers = 4
     output_size = 1
 
     learning_rate = 0.0001

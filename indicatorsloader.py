@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 # Load data into dataframe
-df = pd.read_csv('BTC_USDT_1h_with_indicators.csv', header=0)
+df = pd.read_csv('csv/BTC_USDT_15m_2015-01-01_now_binance.csv', header=0)
 
 column_names = df.columns
 print(df)
