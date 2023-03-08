@@ -18,7 +18,7 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
 
     # load data from CSV file
-    df = pd.read_csv("csv//BTC_USDT_15m_2015-01-01_now_binance.csv")
+    df = pd.read_csv("BTC_USDT_15m_with_indicators.csv")
 
     # Convert the date column to a datetime object
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -70,13 +70,13 @@ if __name__ == '__main__':
 
     # create DataLoader objects for train, validation, and test sets
     batch_size = 64
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, drop_last=True, num_workers=4)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
     input_size = features.shape[1]
-    hidden_size = 256
-    num_layers = 4
+    hidden_size = 64
+    num_layers = 2
     output_size = 1
 
     learning_rate = 0.0001

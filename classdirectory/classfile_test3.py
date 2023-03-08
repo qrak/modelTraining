@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import pytorch_lightning as pl
-import os
+import math
 
 
 from torch.utils.tensorboard import SummaryWriter
@@ -11,9 +11,9 @@ from torch.utils.tensorboard import SummaryWriter
 """
 COMMENTED FOR INFORMATION WHAT I FEED TO THE MODEL
 batch_size = 64
-input_size = 32
-hidden_size = 96
-num_layers = 3
+input_size = 18
+hidden_size = 64
+num_layers = 2
 output_size = 1
 output_size = 1
 
@@ -39,55 +39,30 @@ class LSTMRegressor(pl.LightningModule):
         self.weight_decay = weight_decay
         self.max_norm = max_norm
         self.weight_decay_scheduler = WeightDecayScheduler(weight_decay)
-        self.conv_layers = nn.Sequential(
-            nn.Conv1d(in_channels=input_size, out_channels=hidden_size * 2, kernel_size=3, stride=1, padding=1),
-            nn.Conv1d(in_channels=hidden_size * 2, out_channels=hidden_size * 2, kernel_size=3, stride=1, padding=1)
-        )
-        # fully connected layers for self-attention mechanism
-        self.fc_query = nn.Linear(hidden_size * 2, hidden_size)
-        self.fc_key = nn.Linear(hidden_size * 2, hidden_size)
-        self.fc_value = nn.Linear(hidden_size * 2, hidden_size)
-        self.lstm1 = nn.LSTM(input_size=hidden_size, hidden_size=hidden_size, num_layers=num_layers,
+        self.lstm1 = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
                             batch_first=True, bidirectional=True)
-        self.lstm2 = nn.LSTM(input_size=hidden_size * 2, hidden_size=hidden_size, num_layers=num_layers,
+        self.lstm2 = nn.LSTM(input_size=hidden_size * 2, hidden_size=hidden_size * 2, num_layers=num_layers,
                             batch_first=True, bidirectional=True)
-        self.layer_norm = nn.LayerNorm([hidden_size * 2, sequence_length // 3])
-        self.fc1 = nn.Linear(hidden_size * 2, hidden_size)
+        self.layer_norm = nn.LayerNorm([hidden_size * 4, sequence_length // 3])
+        self.fc1 = nn.Linear(hidden_size * 4, hidden_size)
         self.fc2 = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(dropout)
         self.l1 = nn.L1Loss()
 
     def forward(self, x):
         # x shape: (batch_size, seq_len, input_size)
-        #print('Input shape:', x.shape)
-        x = x.permute(0, 2, 1)  # (batch_size, input_size, seq_len)
-        #print('Permute shape:', x.shape)
-        x = self.conv_layers(x)  # (batch_size, hidden_size*4, seq_len)
-        #print('Conv layers shape:', x.shape)
-        x = self.layer_norm(x)  # (batch_size, hidden_size*4, seq_len)
-        #print('Layer norm shape:', x.shape)
-        x = F.relu(x)  # (batch_size, hidden_size*4, seq_len)
-        #print('ReLU shape:', x.shape)
+        x, _ = self.lstm1(x)
+        x, _ = self.lstm2(x)
         x = x.permute(0, 2, 1)  # (batch_size, seq_len, hidden_size*4)
-        #print('Permute shape:', x.shape)
-        # add self-attention mechanism
-        query = self.fc_query(x)  # (batch_size, seq_len, hidden_size)
-        key = self.fc_key(x)  # (batch_size, seq_len, hidden_size)
-        value = self.fc_value(x)  # (batch_size, seq_len, hidden_size)
-        energy = torch.bmm(query, key.transpose(1, 2))  # (batch_size, seq_len, seq_len)
-        attention = F.softmax(energy, dim=2)  # (batch_size, seq_len, seq_len)
-        x = torch.bmm(attention, value)  # (batch_size, seq_len, hidden_size)
 
-        #print('x shape after self-attention:', x.shape)
+        # apply layer normalization and feedforward layers
+        x = self.layer_norm(x)
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
 
-        lstm1_out, _ = self.lstm1(x)
-        lstm2_out, _ = self.lstm2(lstm1_out)
-        x = lstm2_out[:, -1, :]  # use only the last hidden state
-        x = self.fc1(x)  # (batch_size, seq_len, hidden_size)
-        x = F.relu(x)  # (batch_size, seq_len, hidden_size)
-        x = self.dropout(x)  # (batch_size, seq_len, hidden_size)
-        x = self.fc2(x)  # (batch_size, seq_len, 1)
-        return x  # (batch_size,)
+        return x
+
 
     def training_step(self, batch, batch_idx):
         x, y = batch
