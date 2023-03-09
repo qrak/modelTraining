@@ -1,11 +1,11 @@
 import torch
-from torch.nn import LSTM, LayerNorm, Module, Linear
+from torch.nn import LSTM, LayerNorm, Module, Linear, BatchNorm1d
 from torch.nn.functional import softmax
 from torch.nn.functional import mse_loss
 from torch.optim import Adam, lr_scheduler
 from pytorch_lightning import LightningModule
 from torch.nn.init import xavier_uniform_
-
+from torch.nn import ReLU
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -13,8 +13,8 @@ from torch.utils.tensorboard import SummaryWriter
 COMMENTED FOR INFORMATION WHAT I FEED TO THE MODEL
 batch_size = 32
 input_size = 32
-hidden_size = 96
-num_layers = 4
+hidden_size = 16
+num_layers = 3
 output_size = 1
 
 
@@ -23,6 +23,9 @@ weight_decay = 1e-4
 dropout = 0.2
 
 """
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -65,18 +68,21 @@ class LSTMRegressor(LightningModule):
         self.fc1 = Linear(hidden_size * 2, hidden_size * 2) # added linear layer after LSTM
         xavier_uniform_(self.fc1.weight)
         self.attention = SelfAttention(hidden_size * 2)
-        self.norm1 = LayerNorm(hidden_size * 2)
-        self.fc2 = Linear(hidden_size * 2, output_size) # added linear layer after self-attention
+        self.fc2 = Linear(hidden_size * 2, hidden_size) # added linear layer after self-attention
         xavier_uniform_(self.fc2.weight)
-
+        self.relu = ReLU() # added ReLU activation layer
+        self.fc3 = Linear(hidden_size, output_size) # added linear layer after ReLU
+        xavier_uniform_(self.fc3.weight)
 
     def forward(self, x):
         lstm1_out, _ = self.lstm1(x)
-        fc_out = self.fc1(lstm1_out) # apply linear layer after LSTM
-        attention_out = self.attention(fc_out) # apply self-attention on output of linear layer
-        norm_out = self.norm1(attention_out)
-        output = self.fc2(norm_out[:, -1, :])
+        fc1_out = self.fc1(lstm1_out[:, -1, :])
+        attention_out = self.attention(fc1_out)
+        fc2_out = self.fc2(attention_out)
+        relu_out = self.relu(fc2_out)
+        output = self.fc3(relu_out)
         return output
+
 
 
     def training_step(self, batch, batch_idx):
@@ -100,6 +106,7 @@ class LSTMRegressor(LightningModule):
         loss = mse_loss + l1_loss + l2_loss
         self.log('val_loss', loss, prog_bar=True)
         return loss
+
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)

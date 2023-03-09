@@ -9,9 +9,9 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
-from classdirectory.classfile_test3 import LSTMRegressor
+from classdirectory.classfile_test4 import LSTMRegressor
 from pytorch_lightning.callbacks import ModelSummary
-from torch.utils.tensorboard import SummaryWriter
+
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     num_epochs = 200
     input_size = features.shape[1]
-    hidden_size = 64
+    hidden_size = 32
     num_layers = 3
     output_size = 1
     learning_rate = 0.0001
