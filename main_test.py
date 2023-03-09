@@ -9,16 +9,16 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
-from torch.utils.tensorboard import SummaryWriter
 from classdirectory.classfile_test3 import LSTMRegressor
-
+from pytorch_lightning.callbacks import ModelSummary
+from torch.utils.tensorboard import SummaryWriter
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # load data from CSV file
-    df = pd.read_csv("BTC_USDT_1h_with_indicators.csv")
+    df = pd.read_csv("BTC_USDT_1h_with_indicators_pivots.csv")
 
     # Convert the date column to a datetime object
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -68,15 +68,15 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(X_test, y_test)
 
     # create DataLoader objects for train, validation, and test sets
-    batch_size = 96
+    batch_size = 128
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
     num_epochs = 200
     input_size = features.shape[1]
-    hidden_size = 32
-    num_layers = 2
+    hidden_size = 64
+    num_layers = 3
     output_size = 1
     learning_rate = 0.0001
     weight_decay = 1e-3
@@ -99,6 +99,7 @@ if __name__ == '__main__':
         save_last=True
     )
     early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
+    model_summary_callback = ModelSummary(max_depth=1)
     # create hyperparameters dictionary
     # initialize logger
     logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor', default_hp_metric=True)
@@ -116,7 +117,9 @@ if __name__ == '__main__':
     trainer = pl.Trainer(max_epochs=num_epochs,
                          accelerator="gpu" if torch.cuda.is_available() else 0,
                          logger=logger, log_every_n_steps=1,
-                         callbacks=[checkpoint_callback, early_stopping_callback],
+                         callbacks=[checkpoint_callback, early_stopping_callback, model_summary_callback],
+                         gradient_clip_val=0.5,
+                         gradient_clip_algorithm='norm',
                          auto_lr_find=True,
                          auto_scale_batch_size=True)
     model.to(device)
@@ -128,7 +131,7 @@ if __name__ == '__main__':
     # Save model to file
     torch.save(model.state_dict(), file_path)
     model.to(device)
-    trainer.test(model, test_loader)
+    trainer.test(model, test_loader, ckpt_path="best")
 
 
     # switch to evaluation mode
@@ -169,6 +172,7 @@ if __name__ == '__main__':
 
     plt.legend()
     plt.show()
+
     # get the last timestamp, last close value, and last predicted value
     last_timestamp = test_df.index[-1]
     last_close = test_df['close'][-1]

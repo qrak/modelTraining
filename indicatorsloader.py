@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 # Load data into dataframe
-df = pd.read_csv('csv/BTC_USDT_15m_2015-01-01_now_binance.csv', header=0)
+df = pd.read_csv('BTC_USDT_1h_with_indicators_pivots.csv', header=0)
 
 column_names = df.columns
 print(df)
@@ -30,6 +30,8 @@ print(f'There are {num_nans} NaN values in the DataFrame')
 rows_with_nan = df.isna().any(axis=1)
 print("Rows with NaN values:\n", df[rows_with_nan])
 
+# Print the number of rows in the dataframe
+print(f'Number of rows: {df.shape[0]}')
 
 # Check which columns have NaN values
 cols_with_nan = df.columns[df.isna().any()].tolist()

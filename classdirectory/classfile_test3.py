@@ -1,5 +1,5 @@
 import torch
-from torch.nn import LSTM, LayerNorm, Module, Linear
+from torch.nn import LSTM, LayerNorm, Module, Linear, BatchNorm1d
 from torch.nn.functional import softmax
 from torch.nn.functional import mse_loss
 from torch.optim import Adam, lr_scheduler
@@ -62,6 +62,7 @@ class LSTMRegressor(LightningModule):
         self.regularization_strength_l2 = 0.001
         self.lstm1 = LSTM(input_size, hidden_size, num_layers=num_layers, batch_first=True, dropout=dropout,
                           bidirectional=True)
+        self.bn1 = BatchNorm1d(hidden_size * 2)  # add batch normalization layer
         self.fc1 = Linear(hidden_size * 2, hidden_size * 2) # added linear layer after LSTM
         xavier_uniform_(self.fc1.weight)
         self.attention = SelfAttention(hidden_size * 2)
@@ -72,15 +73,15 @@ class LSTMRegressor(LightningModule):
         self.fc3 = Linear(hidden_size, output_size) # added linear layer after ReLU
         xavier_uniform_(self.fc3.weight)
 
-
     def forward(self, x):
         lstm1_out, _ = self.lstm1(x)
-        fc_out = self.fc1(lstm1_out) # apply linear layer after LSTM
-        attention_out = self.attention(fc_out) # apply self-attention on output of linear layer
-        norm_out = self.norm1(attention_out) # apply layer normalization
-        fc2_out = self.fc2(norm_out) # apply linear layer after self-attention
-        relu_out = self.relu(fc2_out) # apply ReLU activation
-        output = self.fc3(relu_out[:, -1, :]) # apply linear layer after ReLU
+        bn1_out = self.bn1(lstm1_out.transpose(1, 2)).transpose(1, 2)  # add batch normalization
+        fc_out = self.fc1(bn1_out)
+        attention_out = self.attention(fc_out)
+        norm_out = self.norm1(attention_out)
+        fc2_out = self.fc2(norm_out)
+        relu_out = self.relu(fc2_out)
+        output = self.fc3(relu_out[:, -1, :])
         return output
 
 
@@ -106,6 +107,7 @@ class LSTMRegressor(LightningModule):
         loss = mse_loss + l1_loss + l2_loss
         self.log('val_loss', loss, prog_bar=True)
         return loss
+
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
