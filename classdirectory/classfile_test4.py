@@ -87,6 +87,8 @@ class LSTMRegressor(LightningModule):
         l2_loss = sum(p.pow(2).sum() for p in self.parameters()) * self.regularization_strength_l2
         loss = mse_loss + l1_loss + l2_loss
         self.log('train_loss', loss)
+        lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        self.log('learning_rate', lr, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -109,7 +111,7 @@ class LSTMRegressor(LightningModule):
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True,
-                                                   eps=1e-8)
+                                                   eps=1e-8, min_lr=0.000001)
         return {
             'optimizer': optimizer,
             'lr_scheduler': scheduler,

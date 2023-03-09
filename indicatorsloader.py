@@ -36,7 +36,7 @@ cols_with_nan = df.columns[df.isna().any()].tolist()
 print("Columns with NaN values:", cols_with_nan)
 
 # Drop columns with Nan values
-#df = df.dropna(axis=1)
+#df = df.dropna(axis=0)
 
 # Save dataframe to CSV file
 #df.to_csv('BTC_USDT_5m_with_indicators.csv', index=False)

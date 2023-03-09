@@ -10,7 +10,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
 
-from classdirectory.classfile_test4 import LSTMRegressor
+from classdirectory.classfile_test3 import LSTMRegressor
+
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -21,9 +22,8 @@ if __name__ == '__main__':
 
     # Convert the date column to a datetime object
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df = df.sort_values('timestamp', ascending=True)
     df.set_index('timestamp', inplace=True)
-
+    df = df.sort_index()
     # Create new columns for day of week, day of month, and day of year
     df['day_of_week'] = df.index.dayofweek
     df['day_of_month'] = df.index.day
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     # separate features and labels
     features = df.drop(columns=['close']).values
     labels = df['close'].values.reshape(-1, 1)
-
+    print(df)
     # scale data
     scaler = MinMaxScaler()
     features_scaled = scaler.fit_transform(features)
@@ -68,17 +68,17 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(X_test, y_test)
 
     # create DataLoader objects for train, validation, and test sets
-    batch_size = 32
+    batch_size = 64
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
     num_epochs = 200
     input_size = features.shape[1]
-    hidden_size = 48
+    hidden_size = 64
     num_layers = 2
     output_size = 1
-    learning_rate = 0.001
+    learning_rate = 0.0001
     weight_decay = 1e-3
     dropout = 0.2
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         mode='min',
         save_last=True
     )
-    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=30, mode="min")
+    early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
     # create hyperparameters dictionary
     # initialize logger
     logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor', default_hp_metric=True)

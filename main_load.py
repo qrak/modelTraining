@@ -65,18 +65,18 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(features_test_tensor, labels_test_tensor)
 
 
-    test_loader = DataLoader(test_dataset, batch_size=64, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=32, drop_last=True)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     # create model
     input_size = features.shape[1]
-    hidden_size = 32
+    hidden_size = 64
     num_layers = 2
     output_size = 1
     learning_rate = 0.0001
     weight_decay = 1e-3
     dropout = 0.2
     # load saved model state dictionary
-    model_state_dict = torch.load("save/best_model_18_32_2_0.2_20230308-233345-227752.pt", map_location=device)
+    model_state_dict = torch.load("save/best_model_18_64_2_0.2_20230309-031653-315279.pt", map_location=device)
 
     # determine the hyperparameters of the saved model by inspecting its state dictionary
 
