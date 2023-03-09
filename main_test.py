@@ -9,7 +9,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
-
+from torch.utils.tensorboard import SummaryWriter
 from classdirectory.classfile_test3 import LSTMRegressor
 
 
@@ -68,14 +68,14 @@ if __name__ == '__main__':
     test_dataset = TensorDataset(X_test, y_test)
 
     # create DataLoader objects for train, validation, and test sets
-    batch_size = 64
+    batch_size = 96
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=4)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=4)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
     num_epochs = 200
     input_size = features.shape[1]
-    hidden_size = 64
+    hidden_size = 32
     num_layers = 2
     output_size = 1
     learning_rate = 0.0001
@@ -84,6 +84,7 @@ if __name__ == '__main__':
 
     model = LSTMRegressor(input_size, hidden_size, num_layers, output_size, learning_rate, dropout=dropout,
                           weight_decay=weight_decay).to(device)
+
     optimizer_config = model.configure_optimizers()
     optimizer = optimizer_config['optimizer']
     lr_scheduler = optimizer_config['lr_scheduler']
@@ -161,6 +162,11 @@ if __name__ == '__main__':
 
     plt.plot(test_df.index, test_actual_unscaled, label='actual')
     plt.plot(test_df.index, test_pred_unscaled, label='predicted')
+    plt.title(f"best_model_{input_size}_{hidden_size}_{num_layers}_{dropout}_{time_stamp}")
+    plt.grid(True)
+
+    # save the plot as an image
+
     plt.legend()
     plt.show()
     # get the last timestamp, last close value, and last predicted value
