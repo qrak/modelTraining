@@ -1,17 +1,16 @@
-import torch
+import datetime
+import os
 import numpy as np
 import pandas as pd
-import os
-import datetime
 import pytorch_lightning as pl
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
-from classdirectory.classfile_test4 import LSTMRegressor
+import torch
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from torch.utils.data import DataLoader, TensorDataset
 
-
+from classdirectory.classfile_test4 import LSTMRegressor
 
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -76,21 +75,19 @@ if __name__ == '__main__':
 
     num_epochs = 200
     input_size = features.shape[1]
-    hidden_size = 32
+    hidden_size = 48
     num_layers = 2
     output_size = 1
-    learning_rate = 0.0001
+    learning_rate = 0.001
     weight_decay = 1e-3
     dropout = 0.2
 
     model = LSTMRegressor(input_size, hidden_size, num_layers, output_size, learning_rate, dropout=dropout,
                           weight_decay=weight_decay).to(device)
-
-
-
     optimizer_config = model.configure_optimizers()
     optimizer = optimizer_config['optimizer']
     lr_scheduler = optimizer_config['lr_scheduler']
+
     # create checkpoint callback
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
         monitor='val_loss',
@@ -123,14 +120,16 @@ if __name__ == '__main__':
                          auto_scale_batch_size=True)
     model.to(device)
     trainer.fit(model, train_loader, val_loader)
-
     # Generate file name with current time
     time_stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     file_name = f"best_model_{input_size}_{hidden_size}_{num_layers}_{dropout}_{time_stamp}.pt"
     file_path = os.path.join("save", file_name)
-
     # Save model to file
     torch.save(model.state_dict(), file_path)
+    model.to(device)
+    trainer.test(model, test_loader)
+
+
     # switch to evaluation mode
     model.eval()
     model.to(device)

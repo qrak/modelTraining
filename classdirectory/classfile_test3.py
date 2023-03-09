@@ -38,6 +38,7 @@ class LSTMRegressor(pl.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.gradient_norm = max_norm
+
         self.weight_decay_scheduler = WeightDecayScheduler(weight_decay)
         self.conv_layers = nn.Sequential(
             nn.Conv1d(in_channels=input_size, out_channels=hidden_size * 2, kernel_size=3, stride=1, padding=1),
@@ -131,6 +132,7 @@ class LSTMRegressor(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True, eps=1e-8)
+
         return {
             'optimizer': optimizer,
             'lr_scheduler': scheduler,
