@@ -2,7 +2,7 @@ import torch
 from torch.nn import LSTM, LayerNorm, Module, Linear, BatchNorm1d
 from torch.nn.functional import softmax
 from torch.nn.functional import mse_loss
-from torch.optim import Adam, lr_scheduler
+from torch.optim import Adam, lr_scheduler, RMSprop
 from pytorch_lightning import LightningModule
 from torch.nn.init import xavier_uniform_
 from torch.nn import ReLU
@@ -118,6 +118,7 @@ class LSTMRegressor(LightningModule):
 
     def configure_optimizers(self):
         optimizer = Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay)
+        #optimizer = RMSprop(self.parameters(), lr=self.learning_rate, alpha=0.9)
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True,
                                                    eps=1e-8, min_lr=0.000001)
         return {
