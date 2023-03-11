@@ -5,7 +5,7 @@ import os
 
 
 class CandleDownloader:
-    def __init__(self, exchange_name='binance', pair_name='BTC/USDT', timeframe='5m', start_time='2015-01-01T00:00:00Z', end_time=None, batch_size=1000, output_file=None):
+    def __init__(self, exchange_name='binance', pair_name='ETH/USDT', timeframe='1m', start_time='2015-01-01T00:00:00Z', end_time=None, batch_size=1000, output_file=None):
         self.exchange = getattr(ccxt, exchange_name)()
         self.pair_name = pair_name
         self.timeframe = timeframe
@@ -82,7 +82,7 @@ class CandleDownloader:
                 self.buffer = []
 
                 # pause for a short time to avoid request blocking
-                #time.sleep(0.2)
+                time.sleep(0.1)
 
             except Exception as e:
                 print(f"Exception occurred: {e}")
