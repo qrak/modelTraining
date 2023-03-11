@@ -9,7 +9,11 @@ class LoadModel(LSTMTrainer):
     def __init__(self, file_path):
         super().__init__()
         self.file_path = file_path
-
+        try:
+            self.model_state_dict = torch.load(self.file_path, map_location=self.device)
+        except FileNotFoundError:
+            print(f'Saved model filename {self.file_path} not found!')
+            exit()
     def dir_path(self):
         dir_path = self.dir_path
         return dir_path
@@ -34,13 +38,13 @@ class LoadModel(LSTMTrainer):
         self.df['day_of_year'] = self.df.index.dayofyear
         # Calculate the percentage change of the 'close' price for each period
         self.df['close_pct_change'] = self.df['close'].pct_change()
-        model_state_dict = torch.load(self.file_path, map_location=self.device)
+
         sliced_rows = 50
 
         self.df = self.df.iloc[sliced_rows:]
         self.preprocess_data(self.df)
-        self.configure_model()
-        self.model.load_state_dict(model_state_dict)
         self.test_dataset = TensorDataset(self.inputs_tensor, self.outputs_tensor)
         self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, drop_last=True)
+        self.configure_model()
+        self.model.load_state_dict(self.model_state_dict)
         self.evaluate_model()

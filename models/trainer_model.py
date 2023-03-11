@@ -1,4 +1,5 @@
 import torch
+import pandas as pd
 from matplotlib.pyplot import plot, grid, legend, show, title
 from datetime import datetime
 from os import path
@@ -66,14 +67,20 @@ class LSTMTrainer:
 
     def preprocess_data(self, data_file):
         self.df = data_file
+        if 'timestamp' in self.df.columns:
+            self.df.set_index('timestamp', inplace=True)
+            self.df = self.df.sort_index()
         self.labels = self.df['close_pct_change'].shift(-1).fillna(0).values.reshape(-1, 1)
         self.features = self.df.drop(columns=['close', 'close_pct_change']).values
         self.features_scaled = self.scaler.fit_transform(self.features)
         self.labels_scaled = self.scaler.fit_transform(self.labels)
-        # Convert the data into inputs and outputs
-        for i in range(self.sequence_length, len(self.features_scaled)):
-            self.inputs.append(self.features_scaled[i - self.sequence_length:i])
-            self.outputs.append(self.labels_scaled[i])
+
+        # Convert the data into inputs and outputs using sliding windows
+        for i in range(len(self.features_scaled) - self.sequence_length + 1):
+            window_start = i
+            window_end = i + self.sequence_length
+            self.inputs.append(self.features_scaled[window_start:window_end])
+            self.outputs.append(self.labels_scaled[window_end - 1])
         self.inputs_array = array(self.inputs, dtype=float32)
         self.outputs_array = array(self.outputs, dtype=float32)
         self.inputs_tensor = torch.tensor(self.inputs_array, dtype=torch.float32)
@@ -106,17 +113,16 @@ class LSTMTrainer:
                                        self.learning_rate, dropout=self.dropout, weight_decay=self.weight_decay).to(
             self.device)
         # Configure model optimizers
-        optimizer_config = self.model.configure_optimizers()
-        self.optimizer = optimizer_config['optimizer']
-        self.lr_scheduler = optimizer_config['lr_scheduler']
+        self.optimizer_config = self.model.configure_optimizers()
+        self.optimizer = self.optimizer_config['optimizer']
+        self.lr_scheduler = self.optimizer_config['lr_scheduler']
         # Configure checkpoint callback
         self.checkpoint_callback = callbacks.ModelCheckpoint(
             monitor='val_loss',
             dirpath='checkpoints/',
             filename='best_model_{epoch}_{val_loss:.4f}',
             save_top_k=1,
-            mode='min',
-            #save_last=True
+            mode='min'
         )
         # Configure early stopping and summary callback
         self.early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
@@ -164,16 +170,16 @@ class LSTMTrainer:
                 x, y = batch
                 x = x.to(self.device)
                 y_pred = self.model(x)
+                test_pred.append(y_pred.cpu().numpy())
+                test_actual.append(y.cpu().numpy())
 
-        # Reshape and unscale predicted and actual values
-        test_pred.append(y_pred.cpu().numpy())
-        test_actual.append(y.cpu().numpy())
         test_pred = concatenate(test_pred, axis=0)
         test_actual = concatenate(test_actual, axis=0)
         test_pred_unscaled = self.scaler.inverse_transform(test_pred.reshape(-1, 1))
         test_actual_unscaled = self.scaler.inverse_transform(test_actual.reshape(-1, 1))
         # Plot predicted and actual values against time
-        test_df = self.df.tail(len(test_actual_unscaled))
+        test_df = self.df.iloc[-len(test_actual_unscaled):]
+
         plot(test_df.index, test_actual_unscaled, label='actual')
         plot(test_df.index, test_pred_unscaled, label='predicted')
         #plot(test_df.index, test_df['close'], label='close')

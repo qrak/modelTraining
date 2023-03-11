@@ -55,5 +55,5 @@ print(df)
 #column_names = df.columns
 
 # Save dataframe to CSV file
-df.to_csv('../csv_modified/BTC_USDT_1h_indicators.csv_ohlcv', index=False)
+df.to_csv('../csv_modified/BTC_USDT_1h_indicators.csv', index=True)
 

@@ -18,12 +18,12 @@ if __name__ == '__main__':
     except FileNotFoundError:
         print('Wrong csv_ohlcv filename, load your csv_ohlcv file first!')
         exit()
-    #lstm_trainer.split_data()
-    #lstm_trainer.configure_model()
-    #lstm_trainer.train_model()
-    #lstm_trainer.save_model()
-    #lstm_trainer.test_model()
-    #lstm_trainer.evaluate_model()
+    lstm_trainer.split_data()
+    lstm_trainer.configure_model()
+    lstm_trainer.train_model()
+    lstm_trainer.save_model()
+    lstm_trainer.test_model()
+    lstm_trainer.evaluate_model()
     # real data test on binance exchange
-    lstm_model_loader = LoadModel(file_path='save/best_model_18_64_2_0.2_20230311-043410-672985.pt')
-    lstm_model_loader.predict()
+    """lstm_model_loader = LoadModel(file_path='save/best_model_18_64_2_0.2_20230311-170708-657303.pt')
+    lstm_model_loader.predict()"""
