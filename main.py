@@ -17,6 +17,6 @@ if __name__ == '__main__':
     lstm_trainer.save_model()
     lstm_trainer.test_model()
     lstm_trainer.evaluate_model()
+    # real data test on binance exchange
     lstm_model_loader = LoadModel()
-    # real data fetch not finished here, for real data check main_load.py
     lstm_model_loader.predict()
