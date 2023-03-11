@@ -36,8 +36,6 @@ cd neural-network-training
 Create a virtual environment and install the dependencies:
 
 ```bash
-bash
-Copy code
 python3 -m venv env
 source env/bin/activate
 pip install -r requirements.txt
