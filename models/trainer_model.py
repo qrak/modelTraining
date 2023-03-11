@@ -13,10 +13,10 @@ from pytorch_lightning.callbacks import ModelSummary
 from models.lstm_model import LSTMRegressor
 
 class LSTMTrainer:
-    def __init__(self, file_path="save", hidden_size=16, num_layers=2, output_size=1, learning_rate=0.0001, weight_decay=1e-3,
+    def __init__(self, hidden_size=16, num_layers=2, output_size=1, learning_rate=0.0001, weight_decay=1e-3,
                  dropout=0.2, sequence_length=24, batch_size=128, num_epochs=200):
         # Constructor to initialize models variables
-        self.file_path = file_path
+        self.dir_path = "save"
         self.input_size = None
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -146,7 +146,7 @@ class LSTMTrainer:
     def save_model(self):
         time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         file_name = f"best_model_{self.features.shape[1]}_{self.hidden_size}_{self.num_layers}_{self.dropout}_{time_stamp}.pt"
-        file_path = path.join(self.file_path, file_name)
+        file_path = path.join(self.dir_path, file_name)
         torch.save(self.model.state_dict(), file_path)
 
     def test_model(self, ckpt_path="best"):
