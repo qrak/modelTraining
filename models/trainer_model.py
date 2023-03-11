@@ -14,7 +14,7 @@ from models.lstm_model import LSTMBidirectional
 
 
 class LSTMTrainer:
-    def __init__(self, hidden_size=16, num_layers=2, output_size=1, learning_rate=0.0001, weight_decay=1e-3,
+    def __init__(self, hidden_size=64, num_layers=2, output_size=1, learning_rate=0.0001, weight_decay=1e-3,
                  dropout=0.2, sequence_length=24, batch_size=128, num_epochs=200):
         # Constructor to initialize models variables
         self.dir_path = "save"
@@ -101,6 +101,7 @@ class LSTMTrainer:
 
     def configure_model(self):
         # Configure LSTMRegressor model
+
         self.model = LSTMBidirectional(self.features.shape[1], self.hidden_size, self.num_layers, self.output_size,
                                        self.learning_rate, dropout=self.dropout, weight_decay=self.weight_decay).to(
             self.device)
