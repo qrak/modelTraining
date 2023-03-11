@@ -29,7 +29,7 @@ The `indicatorschecker.py` module loads a CSV file containing Bitcoin price data
 Clone the repository:
 
 ```bash
-git clone https://github.com/username/neural-network-training.git
+git clone https://github.com/qrak/neural-network-training.git
 cd neural-network-training
 
 ```
