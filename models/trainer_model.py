@@ -10,7 +10,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, TensorDataset
 from pytorch_lightning.callbacks import ModelSummary
-from models.lstm_model import LSTMRegressor
+from models.lstm_model import LSTMBidirectional
+
 
 class LSTMTrainer:
     def __init__(self, hidden_size=16, num_layers=2, output_size=1, learning_rate=0.0001, weight_decay=1e-3,
@@ -100,8 +101,8 @@ class LSTMTrainer:
 
     def configure_model(self):
         # Configure LSTMRegressor model
-        self.model = LSTMRegressor(self.features.shape[1], self.hidden_size, self.num_layers, self.output_size,
-                                   self.learning_rate, dropout=self.dropout, weight_decay=self.weight_decay).to(
+        self.model = LSTMBidirectional(self.features.shape[1], self.hidden_size, self.num_layers, self.output_size,
+                                       self.learning_rate, dropout=self.dropout, weight_decay=self.weight_decay).to(
             self.device)
         # Configure model optimizers
         optimizer_config = self.model.configure_optimizers()

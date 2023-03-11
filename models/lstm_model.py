@@ -9,23 +9,8 @@ from torch.nn import ReLU
 
 from torch.utils.tensorboard import SummaryWriter
 
-"""
-COMMENTED FOR INFORMATION WHAT I FEED TO THE MODEL
-batch_size = 32
-input_size = 32
-hidden_size = 96
-num_layers = 4
-output_size = 1
-
-
-learning_rate = 1e-3
-weight_decay = 1e-4
-dropout = 0.2
-
-"""
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 class SelfAttention(Module):
     def __init__(self, hidden_size):
@@ -47,7 +32,7 @@ class SelfAttention(Module):
         return weighted
 
 
-class LSTMRegressor(LightningModule):
+class LSTMBidirectional(LightningModule):
     def __init__(self, input_size, hidden_size, num_layers, output_size, learning_rate, dropout, weight_decay, gradient_norm=1.0):
         super().__init__()
         self.input_size = input_size
