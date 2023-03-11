@@ -32,7 +32,7 @@ class LoadModel(LSTMTrainer):
 
         sliced_rows = 50
         self.df = self.df.iloc[sliced_rows:]
-        self.load_data(self.df)
+        self.preprocess_data(self.df)
         self.configure_model()
         self.test_dataset = TensorDataset(self.inputs_tensor, self.outputs_tensor)
         self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, drop_last=True)

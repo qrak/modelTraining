@@ -64,7 +64,7 @@ class LSTMTrainer:
         self.logger = None
         self.trainer = None
 
-    def load_data(self, data_file):
+    def preprocess_data(self, data_file):
         self.df = data_file
         self.labels = self.df['close_pct_change'].shift(-1).fillna(0).values.reshape(-1, 1)
         self.features = self.df.drop(columns=['close', 'close_pct_change']).values
@@ -119,7 +119,6 @@ class LSTMTrainer:
         )
         # Configure early stopping and summary callback
         self.early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
-        self.model_summary_callback = ModelSummary(max_depth=1)
         # Configure TensorBoard Logger
         self.logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor', default_hp_metric=True)
         self.logger.log_hyperparams({
@@ -137,8 +136,7 @@ class LSTMTrainer:
         self.trainer = Trainer(max_epochs=self.num_epochs,
                                accelerator="gpu" if torch.cuda.is_available() else 0,
                                logger=self.logger, log_every_n_steps=1,
-                               callbacks=[self.checkpoint_callback, self.early_stopping_callback,
-                                          self.model_summary_callback],
+                               callbacks=[self.checkpoint_callback, self.early_stopping_callback],
                                auto_lr_find=auto_lr_find,
                                auto_scale_batch_size=auto_scale_batch_size)
         self.model.to(self.device)
@@ -177,6 +175,7 @@ class LSTMTrainer:
         test_df = self.df.tail(len(test_actual_unscaled))
         plot(test_df.index, test_actual_unscaled, label='actual')
         plot(test_df.index, test_pred_unscaled, label='predicted')
+        #plot(test_df.index, test_df['close'], label='close')
         title(
             f"best_model_{self.features.shape[1]}{self.hidden_size}{self.num_layers}{self.dropout}{datetime.now().strftime('%Y%m%d-%H%M%S')}")
         grid(True)
