@@ -30,7 +30,7 @@ class CandleDownloader:
             start_date = start_time.split('T')[0]
             end_date = end_time.split('T')[0] if end_time else 'now'
             filename = f'{symbol_base}_{symbol_quote}_{timeframe}_{start_date}_{end_date}_{self.exchange.id}.csv'
-            self.output_file = f'./csv/{filename}'
+            self.output_file = f'../csv_ohlcv/{filename}'
 
     def download_candles(self):
         # check if the file already exists
