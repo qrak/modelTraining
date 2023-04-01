@@ -1,27 +1,27 @@
-import pandas as pd
+from models.load_model import LoadModel
 from models.trainer_model import LSTMTrainer
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    config = {
+        "hidden_size": 128,
+        "num_layers": 2,
+        "num_heads": 2,
+        "output_size": 1,
+        "learning_rate": 0.0001,
+        "weight_decay": 1e-3,
+        "dropout": 0.2,
+        "sequence_length": 24,
+        "batch_size": 128,
+        "num_epochs": 5
+    }
 
-    # input_size is the number of features you have in your csv_ohlcv
-    # file #input_size variable is taken from csv_ohlcv columns
-    lstm_trainer = LSTMTrainer(
-                               hidden_size=32,
-                               num_layers=2,
-                               output_size=1,
-                               learning_rate=0.00001,
-                               dropout=0.2,
-                                num_epochs=20)
-    try:
-        lstm_trainer.preprocess_data(pd.read_csv("csv_modified/BTC_USDT_1h_indicators.csv"))
-    except FileNotFoundError:
-        print('Wrong csv_ohlcv filename, load your csv_ohlcv file first!')
-        exit()
-    lstm_trainer.split_data()
-    lstm_trainer.configure_model()
-    lstm_trainer.train_model()
-    lstm_trainer.save_model()
-    lstm_trainer.test_model()
-    lstm_trainer.evaluate_model()
-
+    trainer = LSTMTrainer(config)
+    #trainer.preprocess_data("csv_ohlcv/BTC_USDT_1m_2015-01-01_now_binance.csv", chunksize=10000)
+    trainer.preprocess_data("csv_modified/BTC_USDT_5m_indicators.csv", chunksize=10000, input_type='file')
+    trainer.split_data(test_size=0.1, random_state=42)
+    trainer.configure_model()
+    trainer.train_model()
+    trainer.save_model()
+    trainer.test_model()
+    trainer.evaluate_model(tail_n=200)
