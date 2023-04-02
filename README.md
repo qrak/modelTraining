@@ -2,6 +2,7 @@
 
 This repository contains code for training neural networks on various datasets. 
 
+![Alt Text](image001.png)
 ## Usage
 
 ### LSTM GUI
