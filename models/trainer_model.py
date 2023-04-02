@@ -1,8 +1,4 @@
 import torch
-import pandas as pd
-import logging
-import numpy as np
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 from datetime import datetime
 from os import path
@@ -13,13 +9,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 from models.lstm_model import BitcoinPredictor
-
+import pandas as pd
+import logging
+import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')  # or Qt5Agg
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
 
 class ModelTrainer:
     def __init__(self, config):
+        self.logger = logging.getLogger(__name__)
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.feature_scaler = StandardScaler()
@@ -32,12 +32,9 @@ class ModelTrainer:
             mode='min'
         )
         self.early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
-        self.logger = TensorBoardLogger(save_dir='./lightning_logs', name='crypto-prediction', default_hp_metric=True)
-        self.trainer = Trainer(max_epochs=self.config['num_epochs'],
-                               accelerator="gpu" if torch.cuda.is_available() else "cpu",
-                               logger=self.logger, log_every_n_steps=1,
-                               callbacks=[self.checkpoint_callback, self.early_stopping_callback])
         self.config['save_dir'] = "save"
+        self.tensorboard_logger = None
+        self.trainer = None
         self.lr_scheduler = None
         self.optimizer = None
         self.optimizer_config = None
@@ -66,6 +63,7 @@ class ModelTrainer:
         self.features = None
         self.df = None
         self.model_state_dict = None
+
     @staticmethod
     def preprocess_chunk(chunk):
         if 'timestamp' in chunk.columns:
@@ -109,7 +107,7 @@ class ModelTrainer:
             else:
                 raise ValueError("Invalid input_type. Must be either 'file' or 'dataframe'.")
         except Exception as e:
-            logger.error(f"Error in preprocess_data: {e}")
+            self.logger.error(f"Error in preprocess_data: {e}")
 
         for chunk in dfs_list:
             features = chunk.drop(
@@ -160,25 +158,43 @@ class ModelTrainer:
                                           shuffle=False,
                                           drop_last=True)
         except Exception as e:
-            logger.error(f"Error in split_data: {e}")
+            self.logger.error(f"Error in split_data: {e}")
 
     def configure_model(self):
         try:
             self.config['input_size'] = self.features.shape[-1]
             self.model = BitcoinPredictor(self.config)
-            self.logger.log_hyperparams(self.config)
         except Exception as e:
-            logger.error(f"Error in configure_model: {e}")
+            self.logger.error(f"Error in configure_model: {e}")
 
     def train_model(self):
         try:
+            self.tensorboard_logger = TensorBoardLogger(save_dir='./lightning_logs', name='crypto-prediction',
+                                                        default_hp_metric=True)
+            self.tensorboard_logger.log_hyperparams(self.config)
+            self.trainer = Trainer(max_epochs=self.config['num_epochs'],
+                                   accelerator="gpu" if torch.cuda.is_available() else "cpu",
+                                   logger=self.tensorboard_logger, log_every_n_steps=1,
+                                   callbacks=[self.checkpoint_callback, self.early_stopping_callback])
             self.model.to(self.device)
             self.optimizer_config = self.model.configure_optimizers()
             self.optimizer = self.optimizer_config['optimizer']
             self.lr_scheduler = self.optimizer_config['lr_scheduler']
+            # Log the training configuration
+            self.logger.info(f"Training the model with the following configuration:\n"
+                             f"  hidden_size: {self.config['hidden_size']}\n"
+                             f"  num_layers: {self.config['num_layers']}\n"
+                             f"  num_heads: {self.config['num_heads']}\n"
+                             f"  learning_rate: {self.config['learning_rate']}\n"
+                             f"  weight_decay: {self.config['weight_decay']}\n"
+                             f"  dropout: {self.config['dropout']}\n"
+                             f"  sequence_length: {self.config['sequence_length']}\n"
+                             f"  batch_size: {self.config['batch_size']}\n"
+                             f"  num_epochs: {self.config['num_epochs']}\n")
             self.trainer.fit(self.model, self.train_loader, self.val_loader)
+            self.logger.info(f"Model training completed!")
         except Exception as e:
-            logger.error(f"Error in train_model: {e}")
+            self.logger.error(f"Error in train_model: {e}")
 
     def save_model(self):
         try:
@@ -194,23 +210,29 @@ class ModelTrainer:
                         f"{self.config['num_epochs']}_" \
                         f"{timestamp}.pt"
             file_path = path.join(self.config['save_dir'], file_name)
+            self.logger.info(f"Saving the model...")
             torch.save(self.model.state_dict(), file_path)
+            self.logger.info(f"Model saved successfully.")
         except Exception as e:
-            logger.error(f"Error in save_model: {e}")
+            self.logger.error(f"Error in save_model: {e}")
 
     def load_model(self, file_path):
         try:
+            self.logger.info(f"Loading the model...")
             self.model_state_dict = torch.load(file_path, map_location=self.device)
             self.model.load_state_dict(self.model_state_dict)
+            self.logger.info(f"Model loaded.")
         except Exception as e:
-            logger.error(f"Error in load_model: {e}")
+            self.logger.error(f"Error in load_model: {e}")
 
     def test_model(self, ckpt_path="best"):
         try:
+            self.logger.info(f"Testing the model on test set...")
             self.model.to(self.device)
             self.trainer.test(self.model, self.test_loader, ckpt_path=ckpt_path)
+            self.logger.info(f"Model testing on test set finished.")
         except Exception as e:
-            logger.error(f"Error in test_model: {e}")
+            self.logger.error(f"Error in test_model: {e}")
 
     def evaluate_model(self, tail_n=200):
         try:
@@ -230,25 +252,50 @@ class ModelTrainer:
             test_actual = np.concatenate(test_actual, axis=0)
             test_pred_unscaled = self.label_scaler.inverse_transform(test_pred.reshape(-1, 1))
             test_actual_unscaled = self.label_scaler.inverse_transform(test_actual.reshape(-1, 1))
+
             # Plot predicted and actual values against time
-            test_df = self.df.tail(tail_n)
+            if tail_n:
+                test_df = self.df.tail(tail_n)
+            else:
+                test_df = self.df
             test_df.index = pd.to_datetime(test_df.index)
+
+            # Add past predictions to the test DataFrame
+            past_predictions = pd.DataFrame(test_pred_unscaled[:tail_n], index=test_df.index, columns=['predicted'])
+            test_df = pd.concat([test_df, past_predictions], axis=1)
+
+            # Add future predictions to the test DataFrame
+            future_index = pd.date_range(test_df.index[-1] + pd.Timedelta(minutes=1),
+                                         periods=self.config['sequence_length'], freq='T')
+            future_predictions = pd.DataFrame(test_pred_unscaled[-self.config['sequence_length']:], index=future_index,
+                                              columns=['predicted'])
+            test_df = pd.concat([test_df, future_predictions])
+
             # Print last timestamp, actual close value, and predicted close value
             last_timestamp = test_df.index[-1]
-            last_close_value = test_df.loc[test_df.index[-1], 'close']
+            last_close_value = self.df.loc[self.df.index[-1], 'close']
             last_predicted = test_pred_unscaled[-1][0]
-            logger.info(f"Last timestamp: {last_timestamp}")
-            logger.info(f"Last close value: {last_close_value}")
-            logger.info(f"Last predicted value: {last_predicted}")
-            #logger.info("All predicted values: %s", test_pred_unscaled.reshape(-1))
-            #logger.info("All actual values: %s", test_actual_unscaled.reshape(-1))
-            plt.plot(test_df.index, test_actual_unscaled[-tail_n:], label='actual')
-            plt.plot(test_df.index, test_pred_unscaled[-tail_n:], label='predicted')
-            plt.title(
-                f"best_model_{self.features.shape[1]}_{self.config['hidden_size']}_{self.config['num_layers']}_{self.config['dropout']}_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+            self.logger.info(f"Last timestamp: {last_timestamp}")
+            self.logger.info(f"Last close value: {last_close_value}")
+            self.logger.info(f"Last predicted value: {last_predicted}")
+
+            plt.plot(test_df.index[:tail_n], test_actual_unscaled[-tail_n:], label='actual')
+            plt.plot(test_df.index, test_df['predicted'], label='predicted')
+            plt.title(f"loaded model: hidden_size: {self.config['hidden_size']} "
+                      f"num_layers: {self.config['num_layers']} "
+                      f"num_heads: {self.config['num_heads']} "
+                      f"lr: {self.config['learning_rate']} "
+                      f"weight_decay: {self.config['weight_decay']} "
+                      f"dropout: {self.config['dropout']} "
+                      f"sequence_length: {self.config['sequence_length']} "
+                      f"batch_size: {self.config['batch_size']} "
+                      f"num_epochs: {self.config['num_epochs']} ")
             plt.grid(True)
             plt.legend()
             plt.show()
-
         except Exception as e:
-            logger.error(f"Error in evaluate_model: {e}")
+            self.logger.error(f"Error in evaluate_model: {e}")
+
+# for future use
+# self.logger.info("All predicted values: %s", test_pred_unscaled.reshape(-1))
+# self.logger.info("All actual values: %s", test_actual_unscaled.reshape(-1))

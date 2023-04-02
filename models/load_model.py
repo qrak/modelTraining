@@ -5,6 +5,7 @@ import pytz
 from torch.utils.data import DataLoader, TensorDataset
 from models.trainer_model import ModelTrainer
 
+
 class ModelLoader(ModelTrainer):
     def __init__(self, config):
         super().__init__(config)
@@ -19,7 +20,9 @@ class ModelLoader(ModelTrainer):
         exchange = ccxt.binance()
         symbol = 'BTC/USDT'
         timeframe = '5m'
-        limit = 1000  # number of candles to retrieve
+        limit = 1000
+        self.logger.info(
+            f"Fetching live data from exchange for symbol: {symbol}, timeframe: {timeframe}, candles: {limit}.")
         ohlcv = exchange.fetch_ohlcv(symbol=symbol, timeframe=timeframe, limit=limit)
         self.df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         self.df['timestamp'] = pd.to_datetime(self.df['timestamp'], unit='ms')
