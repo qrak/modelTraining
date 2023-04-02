@@ -1,48 +1,29 @@
 import torch
 import os
 from torch import nn
-from torch.nn.functional import softmax
 from pytorch_lightning import LightningModule
-
+from models.attention_mechanisms import MultiHeadSelfAttention
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-class SelfAttention(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(SelfAttention, self).__init__()
-        self.W_query = nn.Linear(input_dim, output_dim)
-        self.W_key = nn.Linear(input_dim, output_dim)
-        self.W_value = nn.Linear(input_dim, output_dim)
+class StockCryptoPredictor(LightningModule):
+    """
+    A PyTorch Lightning module for predicting future values of stocks or cryptocurrencies using a multi-head self-attention LSTM network.
 
-    def forward(self, x):
-        query = self.W_query(x)
-        key = self.W_key(x)
-        value = self.W_value(x)
+    Args:
+        config (dict): A dictionary of configuration parameters for the model.
+        save_dir (str): The directory to save the model checkpoints.
 
-        attention_weights = softmax(torch.matmul(query, key.transpose(-2, -1)) / (query.size(-1) ** 0.5), dim=-1)
-        attention_output = torch.matmul(attention_weights, value)
-        return attention_output
-
-
-class MultiHeadSelfAttention(nn.Module):
-    def __init__(self, input_dim, output_dim, num_heads):
-        super(MultiHeadSelfAttention, self).__init__()
-        self.attention_heads = nn.ModuleList([SelfAttention(input_dim, output_dim) for _ in range(num_heads)])
-        self.linear = nn.Linear(num_heads * output_dim, input_dim)
-
-    def forward(self, x):
-        attention_outputs = [head(x) for head in self.attention_heads]
-        concatenated_outputs = torch.cat(attention_outputs, dim=-1)
-        return self.linear(concatenated_outputs)
-
-
-
-class BitcoinPredictor(LightningModule):
+    Attributes:
+        lstm (nn.LSTM): The LSTM layer of the model.
+        multi_head_attention (MultiHeadSelfAttention): The multi-head self-attention layer of the model.
+        dropout (nn.Dropout): The dropout layer of the model.
+        linear (nn.Linear): The linear layer of the model.
+    """
     def __init__(self, config, save_dir="save"):
-        super(BitcoinPredictor, self).__init__()
+        super(StockCryptoPredictor, self).__init__()
         self.config = config
         self.save_dir = save_dir
-        # Create the save directory if it doesn't exist
         if not os.path.exists(self.save_dir):
             os.makedirs(self.save_dir)
         self.lstm = nn.LSTM(self.config['input_size'], self.config['hidden_size'], self.config['num_layers'],
@@ -64,9 +45,6 @@ class BitcoinPredictor(LightningModule):
         x = self.dropout(residual_output)
         x = self.linear(x[:, -1])
         return x
-
-    # The rest of the class remains the same
-
 
     @staticmethod
     def mean_absolute_percentage_error(y_true, y_pred):

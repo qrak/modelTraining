@@ -3,10 +3,19 @@ import pandas as pd
 import pandas_ta as ta
 import pytz
 from torch.utils.data import DataLoader, TensorDataset
-from models.trainer_model import ModelTrainer
+from models.trainer import ModelTrainer
 
 
 class ModelLoader(ModelTrainer):
+    """
+    A class for loading and evaluating a trained model, and fetching live data from Binance exchange for stock or cryptocurrency price prediction.
+
+    Args:
+    config (dict): A dictionary of configuration parameters for the model.
+
+    Attributes:
+    df (pd.DataFrame): The DataFrame object containing the fetched live data from Binance exchange.
+    """
     def __init__(self, config):
         super().__init__(config)
 

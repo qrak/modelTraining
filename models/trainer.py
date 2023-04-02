@@ -1,14 +1,14 @@
-import torch
-from tqdm import tqdm
-from datetime import datetime
-from os import path
 from pytorch_lightning import Trainer, callbacks
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
-from models.lstm_model import BitcoinPredictor
+from models.stock_crypto_predictor import StockCryptoPredictor
+from tqdm import tqdm
+from datetime import datetime
+from os import path
+import torch
 import pandas as pd
 import logging
 import numpy as np
@@ -17,7 +17,62 @@ import matplotlib.pyplot as plt
 matplotlib.use('TkAgg')  # or Qt5Agg
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+
 class ModelTrainer:
+    """
+        Class for training, testing, and evaluating a stock/crypto price prediction model.
+
+        Attributes:
+            logger: A logger object for logging messages.
+            config: A dictionary containing the configuration for the model.
+            device: A string representing the device on which to train the model.
+            feature_scaler: A StandardScaler object for scaling the features.
+            label_scaler: A StandardScaler object for scaling the labels.
+            checkpoint_callback: A ModelCheckpoint object for saving the best model during training.
+            early_stopping_callback: An EarlyStopping object for stopping training early if the validation loss does not improve.
+            tensorboard_logger: A TensorBoardLogger object for logging training progress.
+            trainer: A Trainer object for training the model.
+            lr_scheduler: An object for adjusting the learning rate during training.
+            optimizer: An optimizer object for optimizing the model's parameters.
+            optimizer_config: A dictionary containing the configuration for the optimizer.
+            model: A StockCryptoPredictor object representing the model.
+            test_loader: A DataLoader object for loading the test data.
+            val_loader: A DataLoader object for loading the validation data.
+            train_loader: A DataLoader object for loading the training data.
+            test_dataset: A TensorDataset object for holding the test data.
+            val_dataset: A TensorDataset object for holding the validation data.
+            train_dataset: A TensorDataset object for holding the training data.
+            y_val: A numpy array representing the labels of the validation data.
+            y_train: A numpy array representing the labels of the training data.
+            X_val: A numpy array representing the features of the validation data.
+            X_train: A numpy array representing the features of the training data.
+            y_test: A numpy array representing the labels of the test data.
+            y_train_val: A numpy array representing the labels of the training and validation data.
+            X_test: A numpy array representing the features of the test data.
+            X_train_val: A numpy array representing the features of the training and validation data.
+            outputs_tensor: A tensor representing the labels of the data.
+            inputs_tensor: A tensor representing the features of the data.
+            outputs_array: A numpy array representing the labels of the data.
+            inputs_array: A numpy array representing the features of the data.
+            labels_scaled: A numpy array representing the scaled labels of the data.
+            features_scaled: A numpy array representing the scaled features of the data.
+            labels: A numpy array representing the labels of the data.
+            features: A numpy array representing the features of the data.
+            df: A pandas DataFrame representing the concatenated chunks of the input data.
+            model_state_dict: A dictionary representing the state of the model.
+
+        Methods:
+            preprocess_chunk(chunk): Preprocesses a single chunk of data.
+            create_sequences(data, seq_length, is_label=False): Creates sequences from the data.
+            preprocess_data(data, chunksize=None, input_type='file'): Preprocesses the data.
+            split_data(test_size, random_state): Splits the data into training, validation, and test sets.
+            configure_model(): Configures the model.
+            train_model(): Trains the model.
+            save_model(): Saves the model.
+            load_model(file_path): Loads the model from the specified file.
+            test_model(ckpt_path="best"): Tests the model on the test set.
+            evaluate_model(tail_n=200): Evaluates the model by plotting the predicted and actual values against time.
+        """
     def __init__(self, config):
         self.logger = logging.getLogger(__name__)
         self.config = config
@@ -32,7 +87,6 @@ class ModelTrainer:
             mode='min'
         )
         self.early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
-        self.config['save_dir'] = "save"
         self.tensorboard_logger = None
         self.trainer = None
         self.lr_scheduler = None
@@ -163,7 +217,7 @@ class ModelTrainer:
     def configure_model(self):
         try:
             self.config['input_size'] = self.features.shape[-1]
-            self.model = BitcoinPredictor(self.config)
+            self.model = StockCryptoPredictor(self.config)
         except Exception as e:
             self.logger.error(f"Error in configure_model: {e}")
 
@@ -196,8 +250,12 @@ class ModelTrainer:
         except Exception as e:
             self.logger.error(f"Error in train_model: {e}")
 
-    def save_model(self):
+    def save_model(self, best_model_ckpt_path=None):
         try:
+            if best_model_ckpt_path:
+                checkpoint = torch.load(best_model_ckpt_path)
+                self.model.load_state_dict(checkpoint['state_dict'])
+
             timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             file_name = f"best_model_{self.config['hidden_size']}_" \
                         f"{self.config['num_layers']}_" \
@@ -210,7 +268,7 @@ class ModelTrainer:
                         f"{self.config['num_epochs']}_" \
                         f"{timestamp}.pt"
             file_path = path.join(self.config['save_dir'], file_name)
-            self.logger.info(f"Saving the model...")
+            self.logger.info(f"Saving model...")
             torch.save(self.model.state_dict(), file_path)
             self.logger.info(f"Model saved successfully.")
         except Exception as e:
