@@ -8,7 +8,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class StockCryptoPredictor(LightningModule):
     """
-    A PyTorch Lightning module for predicting future values of stocks or cryptocurrencies using a multi-head self-attention LSTM network.
+    A PyTorch Lightning module for predicting future values of stocks or cryptocurrencies using a
+    multi-head self-attention LSTM network.
 
     Args:
         config (dict): A dictionary of configuration parameters for the model.
