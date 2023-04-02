@@ -208,6 +208,7 @@ class ModelTrainer:
     def test_model(self, ckpt_path="best"):
         try:
             self.model.to(self.device)
+            self.trainer = Trainer(logger=False)
             self.trainer.test(self.model, self.test_loader, ckpt_path=ckpt_path)
         except Exception as e:
             logger.error(f"Error in test_model: {e}")
@@ -240,8 +241,8 @@ class ModelTrainer:
             logger.info(f"Last timestamp: {last_timestamp}")
             logger.info(f"Last close value: {last_close_value}")
             logger.info(f"Last predicted value: {last_predicted}")
-            logger.info("All predicted values:", test_pred_unscaled.reshape(-1))
-            logger.info("All actual values:", test_actual_unscaled.reshape(-1))
+            #logger.info("All predicted values: %s", test_pred_unscaled.reshape(-1))
+            #logger.info("All actual values: %s", test_actual_unscaled.reshape(-1))
             plt.plot(test_df.index, test_actual_unscaled[-tail_n:], label='actual')
             plt.plot(test_df.index, test_pred_unscaled[-tail_n:], label='predicted')
             plt.title(

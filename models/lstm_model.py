@@ -1,4 +1,5 @@
 import torch
+import os
 from torch import nn
 from torch.nn.functional import softmax
 from pytorch_lightning import LightningModule
@@ -41,6 +42,9 @@ class BitcoinPredictor(LightningModule):
         super(BitcoinPredictor, self).__init__()
         self.config = config
         self.save_dir = save_dir
+        # Create the save directory if it doesn't exist
+        if not os.path.exists(self.save_dir):
+            os.makedirs(self.save_dir)
         self.lstm = nn.LSTM(self.config['input_size'], self.config['hidden_size'], self.config['num_layers'],
                             batch_first=True,
                             bidirectional=True,

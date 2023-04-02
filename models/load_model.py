@@ -1,9 +1,9 @@
-from models.trainer_model import ModelTrainer
 import ccxt
 import pandas as pd
 import pandas_ta as ta
+import pytz
 from torch.utils.data import DataLoader, TensorDataset
-
+from models.trainer_model import ModelTrainer
 
 class ModelLoader(ModelTrainer):
     def __init__(self, config):
@@ -21,8 +21,10 @@ class ModelLoader(ModelTrainer):
         timeframe = '5m'
         limit = 1000  # number of candles to retrieve
         ohlcv = exchange.fetch_ohlcv(symbol=symbol, timeframe=timeframe, limit=limit)
-        self.df = pd.DataFrame(ohlcv[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        self.df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         self.df['timestamp'] = pd.to_datetime(self.df['timestamp'], unit='ms')
+        # Convert timestamp timezone to +2 hours
+        self.df['timestamp'] = self.df['timestamp'].apply(lambda x: ModelLoader.convert_timezone(x, 'UTC', 'Etc/GMT-2'))
         self.df.set_index('timestamp', inplace=True)
         self.df.ta.bop(append=True, length=24)
         self.df.ta.cfo(append=True, length=24)
@@ -42,3 +44,11 @@ class ModelLoader(ModelTrainer):
         self.df = self.df.dropna(axis=1)
         input_size = self.df.shape[1]
         return self.df, input_size
+
+    @staticmethod
+    def convert_timezone(timestamp, from_tz, to_tz):
+        from_tz = pytz.timezone(from_tz)
+        to_tz = pytz.timezone(to_tz)
+        timestamp = from_tz.localize(timestamp)
+        return timestamp.astimezone(to_tz)
+
