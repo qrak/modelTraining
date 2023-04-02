@@ -53,3 +53,9 @@ python3 -m venv env
 source env/bin/activate
 pip install -r requirements.txt
 ```
+
+This project is licensed under the GNU General Public License v3.0. You can find a copy of the license in the LICENSE file.
+
+This means that you are free to use, modify, and distribute this software, as long as any modifications you make are also released under the GPL. If you distribute a modified version of this software, you must make the source code available under the same terms as this license.
+
+For more information about the GPL, please see https://www.gnu.org/licenses/gpl-3.0.en.html.
