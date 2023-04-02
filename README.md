@@ -59,3 +59,5 @@ This project is licensed under the GNU General Public License v3.0. You can find
 This means that you are free to use, modify, and distribute this software, as long as any modifications you make are also released under the GPL. If you distribute a modified version of this software, you must make the source code available under the same terms as this license.
 
 For more information about the GPL, please see https://www.gnu.org/licenses/gpl-3.0.en.html.
+
+This project was made with the help of ChatGPT, a large language model trained by OpenAI, based on the GPT-3.5 architecture. ChatGPT was used to generate text and assist in various aspects of the project's development.
