@@ -208,7 +208,6 @@ class ModelTrainer:
     def test_model(self, ckpt_path="best"):
         try:
             self.model.to(self.device)
-            self.trainer = Trainer(logger=False)
             self.trainer.test(self.model, self.test_loader, ckpt_path=ckpt_path)
         except Exception as e:
             logger.error(f"Error in test_model: {e}")

@@ -8,9 +8,9 @@ from models.trainer_model import ModelTrainer
 
 def start_gui():
     config = {
-        "hidden_size": 128,
+        "hidden_size": 256,
         "num_layers": 2,
-        "num_heads": 4,
+        "num_heads": 2,
         "output_size": 1,
         "learning_rate": 0.0001,
         "weight_decay": 1e-4,
