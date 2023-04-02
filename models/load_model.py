@@ -1,27 +1,24 @@
+from models.trainer_model import ModelTrainer
+import ccxt
 import pandas as pd
 import pandas_ta as ta
-import ccxt
-import torch
 from torch.utils.data import DataLoader, TensorDataset
-from models.trainer_model import LSTMTrainer
 
-class LoadModel(LSTMTrainer):
-    def __init__(self, file_path: str, input_size: int, hidden_size: int, num_layers: int, dropout: float, batch_size: int, sequence_length: int, config: dict):
+
+class ModelLoader(ModelTrainer):
+    def __init__(self, config):
         super().__init__(config)
-        self.file_path = file_path
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.dropout = dropout
-        self.batch_size = batch_size
-        self.sequence_length = sequence_length
-        self.config['sequence_length'] = sequence_length
-        self.model = BitcoinPredictor(input_size=self.input_size, hidden_size=self.hidden_size, output_size=1, num_layers=self.num_layers, num_heads=1, sequence_length=self.sequence_length, batch_size=self.batch_size, num_epochs=self.config['num_epochs'], learning_rate=self.config['learning_rate'], weight_decay=self.config['weight_decay'], dropout=self.dropout)
-        self.load_model()
-    def predict(self):
+
+    def load_and_evaluate(self, file_path, tail_n=200):
+        self.load_model(file_path)
+        self.test_dataset = TensorDataset(self.inputs_tensor, self.outputs_tensor)
+        self.test_loader = DataLoader(self.test_dataset, batch_size=self.config['batch_size'], shuffle=False, drop_last=True)
+        self.evaluate_model(tail_n)
+
+    def fetch_live_data(self):
         exchange = ccxt.binance()
         symbol = 'BTC/USDT'
-        timeframe = '1h'
+        timeframe = '5m'
         limit = 1000  # number of candles to retrieve
         ohlcv = exchange.fetch_ohlcv(symbol=symbol, timeframe=timeframe, limit=limit)
         self.df = pd.DataFrame(ohlcv[:-1], columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -40,14 +37,8 @@ class LoadModel(LSTMTrainer):
         self.df['day_of_week'] = self.df.index.dayofweek
         self.df['day_of_month'] = self.df.index.day
         self.df['day_of_year'] = self.df.index.dayofyear
-
-        sliced_rows = 50
+        sliced_rows = 40
         self.df = self.df.iloc[sliced_rows:]
-        self.preprocess_data(self.df, chunksize=10000)
-
-        # Create tensors for real-time data
-        self.preprocess_data(self.df, chunksize=None)
-        self.test_dataset = TensorDataset(self.inputs_tensor, self.outputs_tensor)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=self.config['batch_size'], shuffle=False,
-                                      drop_last=True, num_workers=4)
-        self.evaluate_model()
+        self.df = self.df.dropna(axis=1)
+        input_size = self.df.shape[1]
+        return self.df, input_size
