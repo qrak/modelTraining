@@ -10,8 +10,17 @@ The `main.py` script can be used to train a Bidirectional LSTM model on cryptocu
 
 ### LSTM Model
 
-The `lstm_model.py` file defines a PyTorch Lightning module for training a Bidirectional LSTM with self-attention on a time series dataset. The LSTM has an input hidden size, number of layers, and output size specified by the user. The module also includes batch normalization, linear layers, layer normalization, and ReLU activation layers. The module uses mean squared error loss with L1 and L2 regularization. The optimizer is Adam with a learning rate and weight decay specified by the user, and the learning rate is reduced on a plateau during training. The module can be trained, validated, and tested using PyTorch Lightning's Trainer class.
+The lstm_model.py script contains a PyTorch implementation of a Bitcoin price predictor using a multi-head self-attention mechanism and a bidirectional LSTM network. The model is defined as a PyTorch Lightning Module, which provides a high-level abstraction for training and evaluating PyTorch models.
 
+The model architecture consists of an LSTM layer with bidirectional processing, followed by a multi-head self-attention layer, a dropout layer, and a linear output layer. The self-attention layer allows the model to learn contextual relationships between different time steps in the input sequence, which can help to improve the accuracy of the model's predictions.
+
+The forward method of the model takes a batch of input sequences as input and returns a batch of predicted Bitcoin prices. The mean_absolute_percentage_error method is used to calculate the mean absolute percentage error between the predicted and true Bitcoin prices, and the calculate_loss method calculates the mean squared error loss between the predicted and true prices.
+
+The model is trained using the training_step method, which calculates the loss and mean absolute percentage error for a batch of training data and logs the values to the training metrics. The validation_step and test_step methods perform similar calculations for the validation and test datasets, respectively.
+
+The configure_optimizers method sets up the Adam optimizer with a specified learning rate and weight decay, as well as a learning rate scheduler that reduces the learning rate by a factor of 0.5 when the validation loss plateaus for 5 epochs. The monitor parameter specifies that the scheduler should monitor the validation loss for scheduling the learning rate updates.
+
+Overall, this script provides a comprehensive implementation of a Bitcoin price predictor using PyTorch and PyTorch Lightning, which can be trained and evaluated using a variety of datasets
 ### Candle Downloader
 
 The `candledownloader.py` module can be used to download candlestick data from the Binance exchange using the CCXT library. The downloaded data is stored in a CSV file. The script takes several parameters such as the exchange name, trading pair, timeframe, start and end time, batch size, and output file name. If no output file name is provided, the script generates a default name based on the specified parameters.
