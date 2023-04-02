@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog
 import threading
-
+import torch
 from models.load_model import ModelLoader
 from models.trainer_model import ModelTrainer
 
@@ -39,7 +39,7 @@ def start_gui():
             trainer.test_model()
             trainer.evaluate_model(tail_n=200)
         except Exception as e:
-            print(f"Error while training the model: {e}")
+            root.after(0, print, f"Error while training the model: {e}")
 
     def on_train_click():
         global csv_training_data_filename
@@ -58,7 +58,7 @@ def start_gui():
             model_loader.configure_model()
             model_loader.load_and_evaluate(model_filename, tail_n=200)
         except Exception as e:
-            print(f"Error while evaluating the model: {e}")
+            root.after(0, print, f"Error while evaluating the model: {e}")
 
     def on_load_click():
         model_filename = filedialog.askopenfilename(initialdir="./", title="Select trained model to load")

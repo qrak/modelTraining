@@ -33,14 +33,10 @@ class ModelTrainer:
         )
         self.early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
         self.logger = TensorBoardLogger(save_dir='./lightning_logs', name='crypto-prediction', default_hp_metric=True)
-        self.auto_lr_find = True
-        self.auto_scale_batch_size = True
         self.trainer = Trainer(max_epochs=self.config['num_epochs'],
-                               accelerator="gpu" if torch.cuda.is_available() else 0,
+                               accelerator="gpu" if torch.cuda.is_available() else "cpu",
                                logger=self.logger, log_every_n_steps=1,
-                               callbacks=[self.checkpoint_callback, self.early_stopping_callback],
-                               auto_lr_find=self.auto_lr_find,
-                               auto_scale_batch_size=self.auto_scale_batch_size)
+                               callbacks=[self.checkpoint_callback, self.early_stopping_callback])
         self.config['save_dir'] = "save"
         self.lr_scheduler = None
         self.optimizer = None
@@ -186,8 +182,17 @@ class ModelTrainer:
 
     def save_model(self):
         try:
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-            file_name = f"best_model_{self.config['hidden_size']}_{self.config['num_layers']}_{self.config['dropout']}_{timestamp}.pt"
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            file_name = f"best_model_{self.config['hidden_size']}_" \
+                        f"{self.config['num_layers']}_" \
+                        f"{self.config['num_heads']}_" \
+                        f"{self.config['learning_rate']}_" \
+                        f"{self.config['weight_decay']}_" \
+                        f"{self.config['dropout']}_" \
+                        f"{self.config['sequence_length']}_" \
+                        f"{self.config['batch_size']}_" \
+                        f"{self.config['num_epochs']}_" \
+                        f"{timestamp}.pt"
             file_path = path.join(self.config['save_dir'], file_name)
             torch.save(self.model.state_dict(), file_path)
         except Exception as e:
@@ -228,23 +233,22 @@ class ModelTrainer:
             # Plot predicted and actual values against time
             test_df = self.df.tail(tail_n)
             test_df.index = pd.to_datetime(test_df.index)
-
+            # Print last timestamp, actual close value, and predicted close value
+            last_timestamp = test_df.index[-1]
+            last_close_value = test_df.loc[test_df.index[-1], 'close']
+            last_predicted = test_pred_unscaled[-1][0]
+            logger.info(f"Last timestamp: {last_timestamp}")
+            logger.info(f"Last close value: {last_close_value}")
+            logger.info(f"Last predicted value: {last_predicted}")
+            logger.info("All predicted values:", test_pred_unscaled.reshape(-1))
+            logger.info("All actual values:", test_actual_unscaled.reshape(-1))
             plt.plot(test_df.index, test_actual_unscaled[-tail_n:], label='actual')
             plt.plot(test_df.index, test_pred_unscaled[-tail_n:], label='predicted')
-            # plot(test_df.index, test_df['close'], label='close')
             plt.title(
                 f"best_model_{self.features.shape[1]}_{self.config['hidden_size']}_{self.config['num_layers']}_{self.config['dropout']}_{datetime.now().strftime('%Y%m%d-%H%M%S')}")
             plt.grid(True)
             plt.legend()
             plt.show()
-            # Print last timestamp, actual close value, and predicted close value
-            last_timestamp = test_df.index[-1]
-            last_close_value = test_df.loc[test_df.index[-1], 'close']
-            last_predicted = test_pred_unscaled[-1][0]
-            print(f"Last timestamp: {last_timestamp}")
-            print(f"Last close value: {last_close_value}")
-            print(f"Last predicted value: {last_predicted}")
-            print("All predicted values:", test_pred_unscaled.reshape(-1))
-            print("All actual values:", test_actual_unscaled.reshape(-1))
+
         except Exception as e:
             logger.error(f"Error in evaluate_model: {e}")
