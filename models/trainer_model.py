@@ -10,7 +10,7 @@ from pytorch_lightning import Trainer, callbacks
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, TensorDataset
 from models.lstm_model import BitcoinPredictor
 
@@ -22,8 +22,8 @@ class ModelTrainer:
     def __init__(self, config):
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.feature_scaler = MinMaxScaler()
-        self.label_scaler = MinMaxScaler()
+        self.feature_scaler = StandardScaler()
+        self.label_scaler = StandardScaler()
         self.checkpoint_callback = callbacks.ModelCheckpoint(
             monitor='val_loss',
             dirpath='checkpoints/',
@@ -32,7 +32,7 @@ class ModelTrainer:
             mode='min'
         )
         self.early_stopping_callback = EarlyStopping(monitor="val_loss", patience=15, mode="min")
-        self.logger = TensorBoardLogger(save_dir='./lightning_logs', name='bilstm-regressor', default_hp_metric=True)
+        self.logger = TensorBoardLogger(save_dir='./lightning_logs', name='crypto-prediction', default_hp_metric=True)
         self.auto_lr_find = True
         self.auto_scale_batch_size = True
         self.trainer = Trainer(max_epochs=self.config['num_epochs'],

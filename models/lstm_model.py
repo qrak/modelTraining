@@ -27,10 +27,13 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(self, input_dim, output_dim, num_heads):
         super(MultiHeadSelfAttention, self).__init__()
         self.attention_heads = nn.ModuleList([SelfAttention(input_dim, output_dim) for _ in range(num_heads)])
+        self.linear = nn.Linear(num_heads * output_dim, input_dim)
 
     def forward(self, x):
         attention_outputs = [head(x) for head in self.attention_heads]
-        return torch.cat(attention_outputs, dim=-1)
+        concatenated_outputs = torch.cat(attention_outputs, dim=-1)
+        return self.linear(concatenated_outputs)
+
 
 
 class BitcoinPredictor(LightningModule):
@@ -38,12 +41,14 @@ class BitcoinPredictor(LightningModule):
         super(BitcoinPredictor, self).__init__()
         self.config = config
         self.save_dir = save_dir
-        self.lstm = nn.LSTM(self.config['input_size'], self.config['hidden_size'], self.config['num_layers'], batch_first=True,
-                            bidirectional=True, dropout=self.config['dropout'])
+        self.lstm = nn.LSTM(self.config['input_size'], self.config['hidden_size'], self.config['num_layers'],
+                            batch_first=True,
+                            bidirectional=True,
+                            dropout=self.config['dropout'])
         self.multi_head_attention = MultiHeadSelfAttention(2 * self.config['hidden_size'], self.config['hidden_size'],
                                                            self.config['num_heads'])
-        self.dropout = nn.Dropout(0.2)
-        self.linear = nn.Linear(self.config['hidden_size'] * self.config['num_heads'], self.config['output_size'])
+        self.dropout = nn.Dropout(self.config['dropout'])
+        self.linear = nn.Linear(2 * self.config['hidden_size'], self.config['output_size'])
 
     def forward(self, x):
         lstm_output, _ = self.lstm(x)
@@ -56,7 +61,11 @@ class BitcoinPredictor(LightningModule):
         x = self.linear(x[:, -1])
         return x
 
-    def mean_absolute_percentage_error(self, y_true, y_pred):
+    # The rest of the class remains the same
+
+
+    @staticmethod
+    def mean_absolute_percentage_error(y_true, y_pred):
         epsilon = 1e-8  # A small constant to avoid division by zero
         return torch.mean(torch.abs((y_true - y_pred) / (y_true + epsilon))) * 100
 
@@ -79,8 +88,8 @@ class BitcoinPredictor(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, mape = self._shared_step(batch, batch_idx)
-        self.log('val_loss', loss, on_epoch=True, prog_bar=True)
-        self.log('val_mape', mape, on_epoch=True, prog_bar=True)
+        self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('val_mape', mape, on_step=True, on_epoch=True, prog_bar=True)
         return loss
 
     def test_step(self, batch, batch_idx):
