@@ -4,10 +4,13 @@ This repository contains code for training neural networks on various datasets.
 
 ## Usage
 
-### LSTM Trainer
+### LSTM GUI
 
-The `main.py` script can be used to train a Bidirectional LSTM model on cryptocurrency price data and make predictions on real data from the Binance exchange. The script loads the data, splits it into training and testing sets, trains the model, saves the trained model, tests the model on the test set, evaluates the model, and makes predictions on real data using the trained model.
+The main_gui.py script creates a simple GUI application using the tkinter library that allows users to train and evaluate a Bitcoin price predictor model. The script uses two main classes, ModelTrainer and ModelLoader, to handle the training and evaluation of the model, respectively.
 
+The GUI application provides two buttons, "Train Model" and "Load Model," that allow the user to either train a new model or load a previously trained model. When the user clicks the "Train Model" button, a file dialog box is displayed that allows the user to select a CSV file containing the training data. The file path of the selected file is then displayed in a text entry box. The selected data is then preprocessed, split into training and testing sets, and used to train the model using the ModelTrainer class. The trained model is then saved to a file, and the ModelTrainer class is used to test and evaluate the model.
+
+When the user clicks the "Load Model" button, a file dialog box is displayed that allows the user to select a previously saved model file. The file path of the selected file is then displayed in a text entry box. The ModelLoader class is used to fetch live data from a Bitcoin price API, preprocess the data, and configure the model using the same parameters as those used during training. The saved model is then loaded from the selected file, and the ModelLoader class is used to evaluate the performance of the model on the live data.
 ### LSTM Model
 
 The lstm_model.py script contains a PyTorch implementation of a Bitcoin price predictor using a multi-head self-attention mechanism and a bidirectional LSTM network. The model is defined as a PyTorch Lightning Module, which provides a high-level abstraction for training and evaluating PyTorch models.
