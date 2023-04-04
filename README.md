@@ -1,41 +1,58 @@
-# Neural Network Training in Python
+## Neural Network Training in Python
 
 This repository contains code for training neural networks on various datasets. 
 
-![Alt Text](image001.png)
+![Neural Networks](image001.png)
+
+## Table of Contents
+
+- [Usage](#usage)
+  - [LSTM GUI](#lstm-gui)
+  - [LSTM Model](#lstm-model)
+  - [Candle Downloader](#candle-downloader)
+  - [Indicators Adder](#indicators-adder)
+  - [Indicators Checker](#indicators-checker)
+- [Installation](#installation)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
 ## Usage
 
 ### LSTM GUI
 
-The main_gui.py script creates a simple GUI application using the tkinter library that allows users to train and evaluate a crypto/stock price predictor model. The script uses two main classes, ModelTrainer and ModelLoader, to handle the training and evaluation of the model, respectively.
+`main.py` creates a simple GUI application with tkinter that allows users to train and evaluate a crypto/stock price predictor model. The script uses two main classes, `ModelTrainer` and `ModelLoader`, for training and evaluation.
 
-The GUI application provides two buttons, "Train Model" and "Load Model," that allow the user to either train a new model or load a previously trained model. When the user clicks the "Train Model" button, a file dialog box is displayed that allows the user to select a CSV file containing the training data. The file path of the selected file is then displayed in a text entry box. The selected data is then preprocessed, split into training and testing sets, and used to train the model using the ModelTrainer class. The trained model is then saved to a file, and the ModelTrainer class is used to test and evaluate the model.
+#### Train Model
 
-When the user clicks the "Load Model" button, a file dialog box is displayed that allows the user to select a previously saved model file. The file path of the selected file is then displayed in a text entry box. The ModelLoader class is used to fetch live data from a binance API, preprocess the data, and configure the model using the same parameters as those used during training. The saved model is then loaded from the selected file, and the ModelLoader class is used to evaluate the performance of the model on the live data.
-### LSTM Model
+1. Click the "Train Model" button.
+2. Select a CSV file containing the training data.
+3. The data is preprocessed, split, and used to train the model.
+4. The model is saved to a file and evaluated.
 
-The lstm_model.py script contains a PyTorch implementation of a crypto/stock price predictor using a multi-head self-attention mechanism and a bidirectional LSTM network. The model is defined as a PyTorch Lightning Module, which provides a high-level abstraction for training and evaluating PyTorch models.
+#### Load Model
 
-The model architecture consists of an LSTM layer with bidirectional processing, followed by a multi-head self-attention layer, a dropout layer, and a linear output layer. The self-attention layer allows the model to learn contextual relationships between different time steps in the input sequence, which can help to improve the accuracy of the model's predictions.
+1. Click the "Load Model" button.
+2. Select a previously saved model file.
+3. The model is loaded and evaluated on live data.
 
-The forward method of the model takes a batch of input sequences as input and returns a batch of predicted crypto/stock prices. The mean_absolute_percentage_error method is used to calculate the mean absolute percentage error between the predicted and true crypto/stock prices, and the calculate_loss method calculates the mean squared error loss between the predicted and true prices.
+#### Model Architecture
 
-The model is trained using the training_step method, which calculates the loss and mean absolute percentage error for a batch of training data and logs the values to the training metrics. The validation_step and test_step methods perform similar calculations for the validation and test datasets, respectively.
+1. Bidirectional LSTM layer
+2. Multi-head self-attention layer
+3. Dropout layer
+4. Linear output layer
 
-The configure_optimizers method sets up the Adam optimizer with a specified learning rate and weight decay, as well as a learning rate scheduler that reduces the learning rate by a factor of 0.5 when the validation loss plateaus for 5 epochs. The monitor parameter specifies that the scheduler should monitor the validation loss for scheduling the learning rate updates.
-
-Overall, this script provides a comprehensive implementation of a crypto/stock price predictor using PyTorch and PyTorch Lightning, which can be trained and evaluated using a variety of datasets
 ### Candle Downloader
 
-The `candledownloader.py` module can be used to download candlestick data from the Binance exchange using the CCXT library. The downloaded data is stored in a CSV file. The script takes several parameters such as the exchange name, trading pair, timeframe, start and end time, batch size, and output file name. If no output file name is provided, the script generates a default name based on the specified parameters.
+`candledownloader.py` downloads candlestick data from Binance using the CCXT library and saves it to a CSV file. Parameters include exchange name, trading pair, timeframe, start and end time, batch size, and output file name.
 
 ### Indicators Adder
 
-The `indicatorsadder.py` module loads historical price data for crypto/stock on the Binance exchange, calculates various technical indicators (EMA, RSI, Bollinger Bands, CCI, ADX), and pivot points. It then saves the data, including the calculated indicators and pivots, to a CSV file for further analysis.
+`indicatorsadder.py` loads historical price data, calculates technical indicators (EMA, RSI, Bollinger Bands, CCI, ADX), and pivot points, and saves the data to a CSV file.
 
 ### Indicators Checker
 
-The `indicatorschecker.py` module loads a CSV file containing crypto/stoc price data and technical indicators, checks for missing or infinite values, and drops columns with NaN values. The script first prints the column names and then uses NumPy to check for infinite values in the data. It then counts the number of NaN values and prints the rows and columns that contain NaN values. Finally, the script drops columns with NaN values and saves the resulting dataframe to a new CSV file.
+`indicatorschecker.py` loads a CSV file containing price data and technical indicators, checks for missing or infinite values, drops columns with NaN values, and saves the cleaned data to a new CSV file.
 
 ## Installation
 
@@ -44,6 +61,7 @@ Clone the repository:
 ```bash
 git clone https://github.com/qrak/neural-network-training.git
 cd neural-network-training
+
 
 ```
 Create a virtual environment and install the dependencies:
