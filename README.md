@@ -59,8 +59,8 @@ This repository contains code for training neural networks on various datasets.
 Clone the repository:
 
 ```bash
-git clone https://github.com/qrak/neural-network-training.git
-cd neural-network-training
+git clone https://github.com/qrak/modelTraining.git
+cd modelTraining
 
 
 ```
