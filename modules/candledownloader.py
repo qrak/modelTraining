@@ -5,8 +5,12 @@ import os
 
 
 class CandleDownloader:
-    def __init__(self, exchange_name='binance', pair_name='ADA/USDT', timeframe='1h', start_time='2015-01-01T00:00:00Z', end_time=None, batch_size=1000, output_file=None):
-        self.exchange = getattr(ccxt, exchange_name)()
+    def __init__(self, exchange_name='poloniex', pair_name='BTC/USDT', timeframe='5m', start_time='2014-01-01T00:00:00Z',
+                 end_time=None, batch_size=1000, output_file=None):
+        self.exchange = getattr(ccxt, exchange_name)(
+            {
+                "enableRateLimit": True,
+            })
         self.pair_name = pair_name
         self.timeframe = timeframe
         self.start_time = start_time
@@ -32,11 +36,22 @@ class CandleDownloader:
             filename = f'{symbol_base}_{symbol_quote}_{timeframe}_{start_date}_{end_date}_{self.exchange.id}.csv'
             self.output_file = f'../csv_ohlcv/{filename}'
 
+    def write_to_output_file(self, df):
+        if os.path.isfile(self.output_file):
+            with open(self.output_file, mode='a', newline='') as f:
+                if f.tell() == 0:
+                    df.to_csv(f, index=False, header=True)
+                else:
+                    df.to_csv(f, index=False, header=False)
+        else:
+            df.to_csv(self.output_file, index=False, header=True)
+
     def download_candles(self):
         # check if the file already exists
         try:
             df = pd.read_csv(self.output_file, usecols=[0], header=None)
-            self.start_time = self.exchange.parse8601(df.iloc[-1, 0]) + (self.exchange.parse_timeframe(self.timeframe) * 1000)
+            self.start_time = self.exchange.parse8601(df.iloc[-1, 0]) + (
+                        self.exchange.parse_timeframe(self.timeframe) * 1000)
             print(f"Resuming from timestamp {self.start_time}...")
         except (FileNotFoundError, pd.errors.EmptyDataError):
             self.start_time = self.exchange.parse8601(self.start_time)
@@ -45,7 +60,8 @@ class CandleDownloader:
         while True:
             try:
                 # fetch the candles for the current time range
-                candles = self.exchange.fetch_ohlcv(self.pair_name, self.timeframe, since=self.start_time, limit=self.batch_size)
+                candles = self.exchange.fetch_ohlcv(self.pair_name, self.timeframe, since=self.start_time,
+                                                    limit=self.batch_size)
 
                 if len(candles) == 0:
                     break
@@ -58,7 +74,6 @@ class CandleDownloader:
 
                 # update the start time for the next request
                 self.start_time = candles[-1][0] + self.exchange.parse_timeframe(self.timeframe) * 1000
-
                 # check if the end time has been reached
                 if self.end_time is not None and self.start_time >= self.exchange.parse8601(self.end_time):
                     break
@@ -69,43 +84,27 @@ class CandleDownloader:
                 print(f"Downloaded {self.total_candles} candles in {self.total_batches} batches...")
 
                 # write the accumulated data to the output file
-                if os.path.isfile(self.output_file):
-                    with open(self.output_file, mode='a', newline='') as f:
-                        if f.tell() == 0:
-                            df.to_csv(f, index=False, header=True)
-                        else:
-                            df.to_csv(f, index=False, header=False)
-                else:
-                    df.to_csv(self.output_file, index=False, header=True)
+                self.write_to_output_file(df)
 
                 # clear the buffer
                 self.buffer = []
 
                 # pause for a short time to avoid request blocking
-                time.sleep(0.1)
+                # time.sleep(0.2)
 
-            except Exception as e:
+            except ccxt.BaseError as e:
                 print(f"Exception occurred: {e}")
                 time.sleep(60)
 
                 # write the remaining data in the buffer to the output file
-            if len(self.buffer) > 0:
-                df = pd.concat(self.buffer)
+                if len(self.buffer) > 0:
+                    df = pd.concat(self.buffer)
+                    self.write_to_output_file(df)
+                    self.buffer = []
 
-                if os.path.isfile(self.output_file):
-                    with open(self.output_file, mode='a', newline='') as f:
-                        if f.tell() == 0:
-                            df.to_csv(f, index=False, header=True)
-                        else:
-                            df.to_csv(f, index=False, header=False)
-                else:
-                    df.to_csv(self.output_file, index=False, header=True)
-
-                # print a message when the script has finished
-            print(
-                f'Download complete. Total candles: {self.total_candles}, Total batches: {self.total_batches}, Output file: {self.output_file}')
-
-
+        # print a message when the script has finished
+        print(
+            f'Download complete. Total candles: {self.total_candles}, Total batches: {self.total_batches}, Output file: {self.output_file}')
 candledownload = CandleDownloader()
 candledownload.download_candles()
 

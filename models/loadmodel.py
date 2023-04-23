@@ -28,7 +28,7 @@ class ModelLoader(ModelTrainer):
     def fetch_live_data(self):
         exchange = ccxt.binance()
         symbol = 'BTC/USDT'
-        timeframe = '5m'
+        timeframe = '1m'
         limit = 1000
         self.logger.info(
             f"Fetching live data from exchange for symbol: {symbol}, timeframe: {timeframe}, candles: {limit}.")
@@ -38,20 +38,20 @@ class ModelLoader(ModelTrainer):
         # Convert timestamp timezone to +2 hours
         self.df['timestamp'] = self.df['timestamp'].apply(lambda x: ModelLoader.convert_timezone(x, 'UTC', 'Etc/GMT-2'))
         self.df.set_index('timestamp', inplace=True)
-        self.df.ta.bop(append=True, length=24)
-        self.df.ta.cfo(append=True, length=24)
-        self.df.ta.psar(append=True, length=24)
-        self.df.ta.natr(append=True, length=24)
-        self.df.ta.eri(append=True, length=24)
-        self.df.ta.fisher(append=True, length=24)
-        self.df.ta.dm(append=True, length=24)
-        self.df.ta.kdj(append=True, length=24)
-        self.df.ta.pgo(append=True, length=24)
-        self.df.ta.willr(append=True, length=24)
+        self.df.ta.bop(append=True, length=60)
+        self.df.ta.cfo(append=True, length=60)
+        self.df.ta.psar(append=True, length=60)
+        self.df.ta.natr(append=True, length=60)
+        self.df.ta.eri(append=True, length=60)
+        self.df.ta.fisher(append=True, length=60)
+        self.df.ta.dm(append=True, length=60)
+        self.df.ta.kdj(append=True, length=60)
+        self.df.ta.pgo(append=True, length=60)
+        #self.df.ta.willr(append=True, length=24)
         self.df['day_of_week'] = self.df.index.dayofweek
         self.df['day_of_month'] = self.df.index.day
         self.df['day_of_year'] = self.df.index.dayofyear
-        sliced_rows = 40
+        sliced_rows = 100
         self.df = self.df.iloc[sliced_rows:]
         self.df = self.df.dropna(axis=1)
         input_size = self.df.shape[1]
